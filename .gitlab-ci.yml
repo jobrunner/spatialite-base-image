@@ -153,7 +153,7 @@ test:alpine-dev:
     - if: $CI_MERGE_REQUEST_ID
 
 # =============================================================================
-# PUSH STAGE
+# PUSH STAGE (latest tags for main branch)
 # =============================================================================
 
 # Push Ubuntu runtime image
@@ -167,7 +167,6 @@ push:ubuntu:
         --platform linux/amd64,linux/arm64 \
         --file Dockerfile.ubuntu \
         --tag $REGISTRY:ubuntu-latest \
-        --tag $REGISTRY:ubuntu-$CI_COMMIT_REF_SLUG \
         --push \
         .
 
@@ -182,7 +181,6 @@ push:ubuntu-dev:
         --platform linux/amd64,linux/arm64 \
         --file Dockerfile.ubuntu-dev \
         --tag $REGISTRY:ubuntu-dev-latest \
-        --tag $REGISTRY:ubuntu-dev-$CI_COMMIT_REF_SLUG \
         --push \
         .
 
@@ -197,7 +195,6 @@ push:alpine:
         --platform linux/amd64,linux/arm64 \
         --file Dockerfile.alpine \
         --tag $REGISTRY:alpine-latest \
-        --tag $REGISTRY:alpine-$CI_COMMIT_REF_SLUG \
         --tag $REGISTRY:latest \
         --push \
         .
@@ -213,13 +210,12 @@ push:alpine-dev:
         --platform linux/amd64,linux/arm64 \
         --file Dockerfile.alpine-dev \
         --tag $REGISTRY:alpine-dev-latest \
-        --tag $REGISTRY:alpine-dev-$CI_COMMIT_REF_SLUG \
         --tag $REGISTRY:dev \
         --push \
         .
 
 # =============================================================================
-# RELEASE TAGS
+# RELEASE TAGS (semantic versioning: v1.2.3 -> 1.2.3, 1.2, 1)
 # =============================================================================
 
 push:release:
@@ -230,39 +226,64 @@ push:release:
   before_script:
     *buildx-setup
   script:
-    # Ubuntu runtime
+    # Extract version components from tag (expects vX.Y.Z format)
+    - |
+      VERSION=${CI_COMMIT_TAG#v}
+      MAJOR=$(echo $VERSION | cut -d. -f1)
+      MINOR=$(echo $VERSION | cut -d. -f2)
+      PATCH=$(echo $VERSION | cut -d. -f3)
+      echo "Version: $VERSION (major=$MAJOR, minor=$MINOR, patch=$PATCH)"
+    # Ubuntu runtime: X.Y.Z, X.Y, X
     - |
       docker buildx build \
         --platform linux/amd64,linux/arm64 \
         --file Dockerfile.ubuntu \
-        --tag $REGISTRY:ubuntu-$CI_COMMIT_TAG \
+        --tag $REGISTRY:ubuntu-$VERSION \
+        --tag $REGISTRY:ubuntu-$MAJOR.$MINOR \
+        --tag $REGISTRY:ubuntu-$MAJOR \
+        --tag $REGISTRY:ubuntu-latest \
         --push \
         .
-    # Ubuntu dev
+    # Ubuntu dev: X.Y.Z, X.Y, X
     - |
       docker buildx build \
         --platform linux/amd64,linux/arm64 \
         --file Dockerfile.ubuntu-dev \
-        --tag $REGISTRY:ubuntu-dev-$CI_COMMIT_TAG \
+        --tag $REGISTRY:ubuntu-dev-$VERSION \
+        --tag $REGISTRY:ubuntu-dev-$MAJOR.$MINOR \
+        --tag $REGISTRY:ubuntu-dev-$MAJOR \
+        --tag $REGISTRY:ubuntu-dev-latest \
         --push \
         .
-    # Alpine runtime
+    # Alpine runtime: X.Y.Z, X.Y, X (also untagged versions)
     - |
       docker buildx build \
         --platform linux/amd64,linux/arm64 \
         --file Dockerfile.alpine \
-        --tag $REGISTRY:alpine-$CI_COMMIT_TAG \
-        --tag $REGISTRY:$CI_COMMIT_TAG \
+        --tag $REGISTRY:alpine-$VERSION \
+        --tag $REGISTRY:alpine-$MAJOR.$MINOR \
+        --tag $REGISTRY:alpine-$MAJOR \
+        --tag $REGISTRY:alpine-latest \
+        --tag $REGISTRY:$VERSION \
+        --tag $REGISTRY:$MAJOR.$MINOR \
+        --tag $REGISTRY:$MAJOR \
+        --tag $REGISTRY:latest \
         --push \
         .
-    # Alpine dev
+    # Alpine dev: X.Y.Z, X.Y, X
     - |
       docker buildx build \
         --platform linux/amd64,linux/arm64 \
         --file Dockerfile.alpine-dev \
-        --tag $REGISTRY:alpine-dev-$CI_COMMIT_TAG \
-        --tag $REGISTRY:dev-$CI_COMMIT_TAG \
+        --tag $REGISTRY:alpine-dev-$VERSION \
+        --tag $REGISTRY:alpine-dev-$MAJOR.$MINOR \
+        --tag $REGISTRY:alpine-dev-$MAJOR \
+        --tag $REGISTRY:alpine-dev-latest \
+        --tag $REGISTRY:dev-$VERSION \
+        --tag $REGISTRY:dev-$MAJOR.$MINOR \
+        --tag $REGISTRY:dev-$MAJOR \
+        --tag $REGISTRY:dev \
         --push \
         .
   rules:
-    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/

@@ -4,25 +4,48 @@ Multi-architecture Docker images (amd64/arm64) with GDAL, SQLite, SpatiaLite, GE
 
 ## Images
 
+### Versioning
+
+Images use semantic versioning. When you tag a release `v1.2.3`, the following tags are created:
+
+| Tag Pattern | Example | Description |
+|-------------|---------|-------------|
+| `X.Y.Z` | `1.2.3` | Exact version (immutable) |
+| `X.Y` | `1.2` | Latest patch of minor version |
+| `X` | `1` | Latest minor/patch of major version |
+| `latest` | - | Latest release (use with caution) |
+
+**Recommendation:** Use exact versions (`1.2.3`) for reproducible builds. Use `X.Y` for automatic patch updates.
+
 ### Runtime Images (for Production)
 
 Minimal images containing only runtime libraries. Use these for your final production containers.
 
-| Image | Base | Description |
-|-------|------|-------------|
-| `registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-latest` | Alpine 3.20 | Smallest image |
-| `registry.gitlab.com/fieldworksdiary/spatialite-image:ubuntu-latest` | Ubuntu 24.04 | glibc-based |
-| `registry.gitlab.com/fieldworksdiary/spatialite-image:latest` | Alpine 3.20 | Default (Alpine) |
+```
+registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-1.2.3
+registry.gitlab.com/fieldworksdiary/spatialite-image:ubuntu-1.2.3
+registry.gitlab.com/fieldworksdiary/spatialite-image:1.2.3          # Alpine (default)
+```
+
+| Base | Tags |
+|------|------|
+| Alpine 3.20 | `alpine-X.Y.Z`, `alpine-X.Y`, `alpine-X`, `alpine-latest`, `X.Y.Z`, `X.Y`, `X`, `latest` |
+| Ubuntu 24.04 | `ubuntu-X.Y.Z`, `ubuntu-X.Y`, `ubuntu-X`, `ubuntu-latest` |
 
 ### Development Images (for Building)
 
 Images with development headers, pkg-config files, and build tools (gcc, g++). Use these to compile applications with CGO bindings.
 
-| Image | Base | Description |
-|-------|------|-------------|
-| `registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-dev-latest` | Alpine 3.20 | For building with musl |
-| `registry.gitlab.com/fieldworksdiary/spatialite-image:ubuntu-dev-latest` | Ubuntu 24.04 | For building with glibc |
-| `registry.gitlab.com/fieldworksdiary/spatialite-image:dev` | Alpine 3.20 | Default dev image |
+```
+registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-dev-1.2.3
+registry.gitlab.com/fieldworksdiary/spatialite-image:ubuntu-dev-1.2.3
+registry.gitlab.com/fieldworksdiary/spatialite-image:dev-1.2.3       # Alpine (default)
+```
+
+| Base | Tags |
+|------|------|
+| Alpine 3.20 | `alpine-dev-X.Y.Z`, `alpine-dev-X.Y`, `alpine-dev-X`, `alpine-dev-latest`, `dev-X.Y.Z`, `dev-X.Y`, `dev-X`, `dev` |
+| Ubuntu 24.04 | `ubuntu-dev-X.Y.Z`, `ubuntu-dev-X.Y`, `ubuntu-dev-X`, `ubuntu-dev-latest` |
 
 ## Why Separate Dev and Runtime Images?
 
@@ -44,15 +67,15 @@ COPY --from=builder /app/myapp .  # may crash or behave unexpectedly
 
 ### The Solution
 
-Use matching dev/runtime image pairs from this repository:
+Use matching dev/runtime image pairs from this repository with the **same version tag**:
 
 ```dockerfile
 # BUILD with dev image
-FROM registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-dev-latest AS builder
+FROM registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-dev-1.0.0 AS builder
 # ... install Go, build ...
 
-# RUN with matching runtime image
-FROM registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-latest
+# RUN with matching runtime image (same version!)
+FROM registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-1.0.0
 COPY --from=builder /app/myapp .
 ```
 
@@ -88,7 +111,7 @@ LD_LIBRARY_PATH=/usr/lib:/usr/local/lib
 
 ```bash
 # Run SQLite with SpatiaLite
-docker run --rm -it registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-latest
+docker run --rm -it registry.gitlab.com/fieldworksdiary/spatialite-image:1.0.0
 
 # Load SpatiaLite extension
 sqlite> SELECT load_extension('mod_spatialite');
@@ -100,7 +123,7 @@ sqlite> SELECT spatialite_version();
 ```bash
 docker run --rm -it \
   -v $(pwd)/data:/data \
-  registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-latest \
+  registry.gitlab.com/fieldworksdiary/spatialite-image:1.0.0 \
   sqlite3 /data/mydb.sqlite
 ```
 
@@ -112,7 +135,7 @@ docker run --rm -it \
 # =============================================================================
 # Build stage - use the dev image with all headers and build tools
 # =============================================================================
-FROM registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-dev-latest AS builder
+FROM registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-dev-1.0.0 AS builder
 
 # Install Go
 RUN apk add --no-cache go
@@ -131,9 +154,9 @@ COPY . .
 RUN CGO_ENABLED=1 go build -o /app/myapp .
 
 # =============================================================================
-# Runtime stage - use the minimal runtime image
+# Runtime stage - use the minimal runtime image (SAME VERSION!)
 # =============================================================================
-FROM registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-latest
+FROM registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-1.0.0
 
 # Copy only the binary from builder
 COPY --from=builder /app/myapp /usr/local/bin/myapp
@@ -147,7 +170,7 @@ Some Go libraries require glibc. Use the Ubuntu variants:
 
 ```dockerfile
 # Build stage
-FROM registry.gitlab.com/fieldworksdiary/spatialite-image:ubuntu-dev-latest AS builder
+FROM registry.gitlab.com/fieldworksdiary/spatialite-image:ubuntu-dev-1.0.0 AS builder
 
 # Install Go
 RUN apt-get update && apt-get install -y --no-install-recommends golang-go \
@@ -159,8 +182,8 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=1 go build -o /app/myapp .
 
-# Runtime stage
-FROM registry.gitlab.com/fieldworksdiary/spatialite-image:ubuntu-latest
+# Runtime stage (SAME VERSION!)
+FROM registry.gitlab.com/fieldworksdiary/spatialite-image:ubuntu-1.0.0
 
 COPY --from=builder /app/myapp /usr/local/bin/myapp
 ENTRYPOINT ["/usr/local/bin/myapp"]
@@ -171,7 +194,7 @@ ENTRYPOINT ["/usr/local/bin/myapp"]
 If you need explicit CGO flags (e.g., for [lukeroth/gdal](https://github.com/lukeroth/gdal)):
 
 ```dockerfile
-FROM registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-dev-latest AS builder
+FROM registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-dev-1.0.0 AS builder
 
 RUN apk add --no-cache go
 
@@ -186,7 +209,7 @@ RUN CGO_ENABLED=1 \
     CGO_LDFLAGS="$(pkg-config --libs gdal)" \
     go build -o /app/myapp .
 
-FROM registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-latest
+FROM registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-1.0.0
 COPY --from=builder /app/myapp /usr/local/bin/myapp
 ENTRYPOINT ["/usr/local/bin/myapp"]
 ```
@@ -297,6 +320,17 @@ docker run --rm -v $(pwd)/tests:/tests spatialite:alpine /tests/test-image.sh
 docker run --rm -v $(pwd)/tests:/tests spatialite:alpine-dev sh -c \
   "/tests/test-image.sh && /tests/test-dev-image.sh"
 ```
+
+## Releasing
+
+Create a new release by tagging with semantic version:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+This triggers the CI pipeline to build and push all version tags.
 
 ## License
 
