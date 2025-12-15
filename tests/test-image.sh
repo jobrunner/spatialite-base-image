@@ -115,8 +115,8 @@ else
     test_result 1 "Buffer function test failed: $BUFFER_TEST"
 fi
 
-# Test 10: Test coordinate transformation
-TRANSFORM_TEST=$(sqlite3 :memory: "SELECT load_extension('mod_spatialite'); SELECT ST_X(Transform(GeomFromText('POINT(0 0)', 4326), 3857));" 2>&1 | tail -1) || true
+# Test 10: Test coordinate transformation (initialize spatial_ref_sys first)
+TRANSFORM_TEST=$(sqlite3 :memory: "SELECT load_extension('mod_spatialite'); SELECT InitSpatialMetaData(1); SELECT ST_X(Transform(GeomFromText('POINT(0 0)', 4326), 3857));" 2>&1 | tail -1) || true
 if echo "$TRANSFORM_TEST" | grep -qE "^[0-9.-]+$"; then
     test_result 0 "Coordinate transformation (PROJ) works"
 else
