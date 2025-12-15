@@ -6,22 +6,18 @@ LABEL description="Alpine-based image with GDAL, SQLite, SpatiaLite, GEOS, librt
 
 # Install all spatial libraries from Alpine repositories
 RUN apk add --no-cache \
-    # Core spatial libraries
     gdal \
     gdal-dev \
     gdal-tools \
     sqlite \
     sqlite-dev \
-    spatialite \
     libspatialite \
     libspatialite-dev \
     geos \
     geos-dev \
     librttopo \
     librttopo-dev \
-    # Python GDAL bindings (optional but useful)
     py3-gdal \
-    # Utilities
     ca-certificates
 
 # Configure environment variables
