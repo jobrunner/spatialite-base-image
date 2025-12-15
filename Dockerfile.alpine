@@ -1,0 +1,36 @@
+# Alpine-based SpatiaLite image with GDAL, GEOS, librttopo
+FROM alpine:3.20
+
+LABEL maintainer="fieldworksdiary"
+LABEL description="Alpine-based image with GDAL, SQLite, SpatiaLite, GEOS, librttopo"
+
+# Install all spatial libraries from Alpine repositories
+RUN apk add --no-cache \
+    # Core spatial libraries
+    gdal \
+    gdal-dev \
+    gdal-tools \
+    sqlite \
+    sqlite-dev \
+    spatialite \
+    libspatialite \
+    libspatialite-dev \
+    geos \
+    geos-dev \
+    librttopo \
+    librttopo-dev \
+    # Python GDAL bindings (optional but useful)
+    py3-gdal \
+    # Utilities
+    ca-certificates
+
+# Configure environment variables
+ENV SPATIALITE_SECURITY=relaxed
+ENV SQLITE_ENABLE_LOAD_EXTENSION=1
+ENV LD_LIBRARY_PATH=/usr/lib:/usr/local/lib
+
+# Set working directory
+WORKDIR /data
+
+# Default command
+CMD ["sqlite3"]

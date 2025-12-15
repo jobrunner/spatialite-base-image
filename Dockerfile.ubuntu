@@ -1,0 +1,37 @@
+# Ubuntu-based SpatiaLite image with GDAL, GEOS, librttopo
+FROM ubuntu:24.04
+
+LABEL maintainer="fieldworksdiary"
+LABEL description="Ubuntu-based image with GDAL, SQLite, SpatiaLite, GEOS, librttopo"
+
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install all spatial libraries from Ubuntu repositories
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Core spatial libraries
+    gdal-bin \
+    libgdal-dev \
+    libsqlite3-dev \
+    libsqlite3-mod-spatialite \
+    libspatialite-dev \
+    libgeos-dev \
+    librttopo-dev \
+    # Python GDAL bindings (optional but useful)
+    python3-gdal \
+    # SQLite CLI
+    sqlite3 \
+    # Utilities
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Configure environment variables
+ENV SPATIALITE_SECURITY=relaxed
+ENV SQLITE_ENABLE_LOAD_EXTENSION=1
+ENV LD_LIBRARY_PATH=/usr/lib:/usr/local/lib
+
+# Set working directory
+WORKDIR /data
+
+# Default command
+CMD ["sqlite3"]
