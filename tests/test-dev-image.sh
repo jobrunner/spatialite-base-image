@@ -2,8 +2,6 @@
 # Test script for SpatiaLite Dev Docker images
 # This script verifies that development tools and headers are available
 
-set -e
-
 FAILED=0
 TESTS_RUN=0
 
@@ -110,12 +108,11 @@ int main() {
 }
 EOF
 
-gcc /tmp/test_sqlite.c -o /tmp/test_sqlite $(pkg-config --cflags --libs sqlite3) 2>/dev/null
-COMPILE_RESULT=$?
-test_result $COMPILE_RESULT "C program compiles and links against SQLite"
-
-if [ $COMPILE_RESULT -eq 0 ]; then
+if gcc /tmp/test_sqlite.c -o /tmp/test_sqlite $(pkg-config --cflags --libs sqlite3) 2>/dev/null; then
+    test_result 0 "C program compiles and links against SQLite"
     /tmp/test_sqlite
+else
+    test_result 1 "C program compiles and links against SQLite"
 fi
 
 # Test 14: Compile a simple C program that links against SpatiaLite
@@ -124,17 +121,20 @@ cat > /tmp/test_spatialite.c << 'EOF'
 #include <spatialite.h>
 
 int main() {
+    spatialite_init(0);
     printf("SpatiaLite version: %s\n", spatialite_version());
+    spatialite_cleanup();
     return 0;
 }
 EOF
 
-gcc /tmp/test_spatialite.c -o /tmp/test_spatialite $(pkg-config --cflags --libs spatialite) 2>/dev/null
-COMPILE_RESULT=$?
-test_result $COMPILE_RESULT "C program compiles and links against SpatiaLite"
-
-if [ $COMPILE_RESULT -eq 0 ]; then
+if gcc /tmp/test_spatialite.c -o /tmp/test_spatialite $(pkg-config --cflags --libs spatialite) 2>/dev/null; then
+    test_result 0 "C program compiles and links against SpatiaLite"
     /tmp/test_spatialite
+else
+    test_result 1 "C program compiles and links against SpatiaLite"
+    echo "  Compile error (trying verbose):"
+    gcc /tmp/test_spatialite.c -o /tmp/test_spatialite $(pkg-config --cflags --libs spatialite) 2>&1 | head -5
 fi
 
 # Test 15: Compile a simple C program that links against GDAL
@@ -148,12 +148,13 @@ int main() {
 }
 EOF
 
-gcc /tmp/test_gdal.c -o /tmp/test_gdal $(pkg-config --cflags --libs gdal) 2>/dev/null
-COMPILE_RESULT=$?
-test_result $COMPILE_RESULT "C program compiles and links against GDAL"
-
-if [ $COMPILE_RESULT -eq 0 ]; then
+if gcc /tmp/test_gdal.c -o /tmp/test_gdal $(pkg-config --cflags --libs gdal) 2>/dev/null; then
+    test_result 0 "C program compiles and links against GDAL"
     /tmp/test_gdal
+else
+    test_result 1 "C program compiles and links against GDAL"
+    echo "  Compile error (trying verbose):"
+    gcc /tmp/test_gdal.c -o /tmp/test_gdal $(pkg-config --cflags --libs gdal) 2>&1 | head -5
 fi
 
 # Cleanup
