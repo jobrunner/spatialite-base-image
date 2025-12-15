@@ -363,4 +363,6 @@ To enable automatic tagging, create a Project Access Token in GitLab:
 
 ## License
 
-MIT
+GPL-2.0-or-later
+
+This project is licensed under the GNU General Public License v2.0 or later due to the inclusion of GPL-licensed components (librttopo). See [LICENSE](LICENSE) for details.
