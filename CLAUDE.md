@@ -6,33 +6,49 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Multi-architecture Docker images (amd64/arm64) providing GDAL, SQLite, SpatiaLite, GEOS, and librttopo on Ubuntu and Alpine base images. Images are published to GitLab Container Registry.
 
+## Image Types
+
+- **Runtime images** (`alpine`, `ubuntu`): Minimal, for production
+- **Dev images** (`alpine-dev`, `ubuntu-dev`): Include headers, gcc, pkg-config for CGO builds
+
 ## Build Commands
 
 ```bash
-# Build Ubuntu image locally
+# Build runtime images locally
+docker build -f Dockerfile.alpine -t spatialite:alpine .
 docker build -f Dockerfile.ubuntu -t spatialite:ubuntu .
 
-# Build Alpine image locally
-docker build -f Dockerfile.alpine -t spatialite:alpine .
+# Build dev images locally
+docker build -f Dockerfile.alpine-dev -t spatialite:alpine-dev .
+docker build -f Dockerfile.ubuntu-dev -t spatialite:ubuntu-dev .
 
 # Build multi-arch (requires buildx)
-docker buildx build --platform linux/amd64,linux/arm64 -f Dockerfile.ubuntu -t spatialite:ubuntu .
+docker buildx build --platform linux/amd64,linux/arm64 -f Dockerfile.alpine -t spatialite:alpine .
 ```
 
 ## Testing
 
 ```bash
-# Run tests inside a container
-docker run --rm -v $(pwd)/tests:/tests spatialite:ubuntu /tests/test-image.sh
+# Test runtime images
 docker run --rm -v $(pwd)/tests:/tests spatialite:alpine /tests/test-image.sh
+docker run --rm -v $(pwd)/tests:/tests spatialite:ubuntu /tests/test-image.sh
+
+# Test dev images (includes compilation tests)
+docker run --rm -v $(pwd)/tests:/tests spatialite:alpine-dev sh -c \
+  "/tests/test-image.sh && /tests/test-dev-image.sh"
 ```
 
-## Architecture
+## File Structure
 
-- `Dockerfile.ubuntu` - Ubuntu 24.04 based image using apt packages
-- `Dockerfile.alpine` - Alpine 3.20 based image using apk packages
-- `.gitlab-ci.yml` - Multi-arch build pipeline with test stage
-- `tests/test-image.sh` - Validates all libraries load correctly and spatial operations work
+- `Dockerfile.alpine` - Alpine 3.20 runtime image
+- `Dockerfile.alpine-dev` - Alpine 3.20 dev image (with headers, gcc, pkg-config)
+- `Dockerfile.ubuntu` - Ubuntu 24.04 runtime image
+- `Dockerfile.ubuntu-dev` - Ubuntu 24.04 dev image (with headers, gcc, pkg-config)
+- `.gitlab-ci.yml` - CI/CD pipeline (build → test → tag → release)
+- `tests/test-image.sh` - Runtime tests (library loading, spatial operations)
+- `tests/test-dev-image.sh` - Dev tests (headers, pkg-config, compilation)
+- `VERSION` - Current version number (used for auto-tagging)
+- `CHANGELOG.md` - Release notes
 
 ## Environment Variables
 
@@ -41,8 +57,30 @@ All images have these pre-configured:
 - `SQLITE_ENABLE_LOAD_EXTENSION=1` - Enables SQLite extension loading
 - `LD_LIBRARY_PATH=/usr/lib:/usr/local/lib` - Library search paths
 
-## Registry Tags
+## Versioning
 
-- `registry.gitlab.com/fieldworksdiary/spatialite-image:ubuntu-latest`
-- `registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-latest`
-- `registry.gitlab.com/fieldworksdiary/spatialite-image:latest` (Alpine)
+Images use semantic versioning (X.Y.Z). Tags created:
+- `alpine-1.0.0`, `alpine-1.0`, `alpine-1`, `alpine-latest`
+- `ubuntu-1.0.0`, `ubuntu-1.0`, `ubuntu-1`, `ubuntu-latest`
+- `alpine-dev-1.0.0`, `alpine-dev-1.0`, `alpine-dev-1`, `alpine-dev-latest`
+- `ubuntu-dev-1.0.0`, `ubuntu-dev-1.0`, `ubuntu-dev-1`, `ubuntu-dev-latest`
+- `1.0.0`, `1.0`, `1`, `latest` (Alpine default)
+- `dev-1.0.0`, `dev-1.0`, `dev-1`, `dev` (Alpine dev default)
+
+## Development Workflow
+
+1. Create feature branch from master
+2. Make changes, update `VERSION` and `CHANGELOG.md`
+3. Push and create Merge Request
+4. Pipeline runs: build → test
+5. After merge to master: auto-tag → release pipeline → GitLab Release
+
+**Important:** Direct commits to master are not allowed. Use Merge Requests.
+
+## CI/CD Variables Required
+
+- `GITLAB_TOKEN` - Project Access Token with `api` and `write_repository` scopes (for auto-tagging)
+
+## Registry
+
+`registry.gitlab.com/fieldworksdiary/spatialite-image`

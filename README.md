@@ -321,16 +321,45 @@ docker run --rm -v $(pwd)/tests:/tests spatialite:alpine-dev sh -c \
   "/tests/test-image.sh && /tests/test-dev-image.sh"
 ```
 
-## Releasing
+## Development Workflow
 
-Create a new release by tagging with semantic version:
+### Branch Protection
 
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
+Direct commits to `master` are not allowed. All changes must go through a Merge Request.
 
-This triggers the CI pipeline to build and push all version tags.
+### Creating a Release
+
+1. **Create a feature branch:**
+   ```bash
+   git checkout -b feature/my-change
+   ```
+
+2. **Make your changes and update VERSION file:**
+   ```bash
+   echo "1.1.0" > VERSION
+   ```
+
+3. **Update CHANGELOG.md** with your changes
+
+4. **Push and create Merge Request:**
+   ```bash
+   git push -u origin feature/my-change
+   ```
+
+5. **Wait for pipeline to pass** (build + test)
+
+6. **Merge to master** - this automatically:
+   - Creates a git tag `v1.1.0` from VERSION file
+   - Builds and pushes all Docker image tags
+   - Creates a GitLab Release with CHANGELOG
+
+### Setup Required
+
+To enable automatic tagging, create a Project Access Token in GitLab:
+
+1. Go to **Settings → Access Tokens**
+2. Create token with `api` and `write_repository` scopes
+3. Add as CI/CD variable `GITLAB_TOKEN` in **Settings → CI/CD → Variables**
 
 ## License
 
