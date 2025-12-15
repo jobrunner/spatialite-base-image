@@ -1,0 +1,41 @@
+# Alpine-based SpatiaLite development image with GDAL, GEOS, librttopo
+# Use this image for building applications with CGO bindings
+FROM alpine:3.20
+
+LABEL maintainer="fieldworksdiary"
+LABEL description="Alpine-based dev image with GDAL, SQLite, SpatiaLite, GEOS, librttopo (includes headers)"
+
+# Install runtime libraries + development packages + build tools
+RUN apk add --no-cache \
+    # Runtime libraries
+    gdal \
+    gdal-tools \
+    sqlite \
+    libspatialite \
+    geos \
+    librttopo \
+    proj \
+    ca-certificates \
+    # Development packages (headers + static libs)
+    gdal-dev \
+    sqlite-dev \
+    libspatialite-dev \
+    geos-dev \
+    librttopo-dev \
+    proj-dev \
+    # Build tools for CGO
+    gcc \
+    g++ \
+    musl-dev \
+    pkgconfig
+
+# Configure environment variables
+ENV SPATIALITE_SECURITY=relaxed
+ENV SQLITE_ENABLE_LOAD_EXTENSION=1
+ENV LD_LIBRARY_PATH=/usr/lib:/usr/local/lib
+
+# Set working directory
+WORKDIR /app
+
+# Default command
+CMD ["/bin/sh"]

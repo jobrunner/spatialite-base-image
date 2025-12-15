@@ -1,15 +1,16 @@
-# Ubuntu-based SpatiaLite runtime image with GDAL, GEOS, librttopo
-# Use this image for production deployments
+# Ubuntu-based SpatiaLite development image with GDAL, GEOS, librttopo
+# Use this image for building applications with CGO bindings
 FROM ubuntu:24.04
 
 LABEL maintainer="fieldworksdiary"
-LABEL description="Ubuntu-based runtime image with GDAL, SQLite, SpatiaLite, GEOS, librttopo"
+LABEL description="Ubuntu-based dev image with GDAL, SQLite, SpatiaLite, GEOS, librttopo (includes headers)"
 
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install only runtime libraries (no -dev packages)
+# Install runtime libraries + development packages + build tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Runtime libraries
     gdal-bin \
     libgdal35 \
     libsqlite3-0 \
@@ -20,6 +21,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libproj25 \
     sqlite3 \
     ca-certificates \
+    # Development packages (headers + static libs)
+    libgdal-dev \
+    libsqlite3-dev \
+    libspatialite-dev \
+    libgeos-dev \
+    librttopo-dev \
+    libproj-dev \
+    # Build tools for CGO
+    gcc \
+    g++ \
+    pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 # Configure environment variables
@@ -28,7 +40,7 @@ ENV SQLITE_ENABLE_LOAD_EXTENSION=1
 ENV LD_LIBRARY_PATH=/usr/lib:/usr/local/lib
 
 # Set working directory
-WORKDIR /data
+WORKDIR /app
 
 # Default command
-CMD ["sqlite3"]
+CMD ["/bin/bash"]

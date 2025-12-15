@@ -4,11 +4,59 @@ Multi-architecture Docker images (amd64/arm64) with GDAL, SQLite, SpatiaLite, GE
 
 ## Images
 
-| Image | Base | Size |
-|-------|------|------|
-| `registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-latest` | Alpine 3.20 | ~150MB |
-| `registry.gitlab.com/fieldworksdiary/spatialite-image:ubuntu-latest` | Ubuntu 24.04 | ~350MB |
-| `registry.gitlab.com/fieldworksdiary/spatialite-image:latest` | Alpine 3.20 | ~150MB |
+### Runtime Images (for Production)
+
+Minimal images containing only runtime libraries. Use these for your final production containers.
+
+| Image | Base | Description |
+|-------|------|-------------|
+| `registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-latest` | Alpine 3.20 | Smallest image |
+| `registry.gitlab.com/fieldworksdiary/spatialite-image:ubuntu-latest` | Ubuntu 24.04 | glibc-based |
+| `registry.gitlab.com/fieldworksdiary/spatialite-image:latest` | Alpine 3.20 | Default (Alpine) |
+
+### Development Images (for Building)
+
+Images with development headers, pkg-config files, and build tools (gcc, g++). Use these to compile applications with CGO bindings.
+
+| Image | Base | Description |
+|-------|------|-------------|
+| `registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-dev-latest` | Alpine 3.20 | For building with musl |
+| `registry.gitlab.com/fieldworksdiary/spatialite-image:ubuntu-dev-latest` | Ubuntu 24.04 | For building with glibc |
+| `registry.gitlab.com/fieldworksdiary/spatialite-image:dev` | Alpine 3.20 | Default dev image |
+
+## Why Separate Dev and Runtime Images?
+
+When building Go applications with CGO bindings (like GDAL or SpatiaLite), the compiled binary links against shared libraries (`.so` files). **The library versions must match between build and runtime.**
+
+### The Problem
+
+If you build in `golang:alpine` and run in a different SpatiaLite image:
+
+```dockerfile
+# DON'T DO THIS - version mismatch risk!
+FROM golang:1.23-alpine AS builder
+RUN apk add gdal-dev  # installs version X
+# ... build ...
+
+FROM some-other-spatialite-image  # has version Y
+COPY --from=builder /app/myapp .  # may crash or behave unexpectedly
+```
+
+### The Solution
+
+Use matching dev/runtime image pairs from this repository:
+
+```dockerfile
+# BUILD with dev image
+FROM registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-dev-latest AS builder
+# ... install Go, build ...
+
+# RUN with matching runtime image
+FROM registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-latest
+COPY --from=builder /app/myapp .
+```
+
+Both images are built from the same base in the same CI pipeline, guaranteeing identical library versions.
 
 ## Included Libraries
 
@@ -18,6 +66,11 @@ Multi-architecture Docker images (amd64/arm64) with GDAL, SQLite, SpatiaLite, GE
 - **GEOS** - Geometry Engine Open Source
 - **librttopo** - RT Topology Library
 - **PROJ** - Coordinate transformation library
+
+Dev images additionally include:
+- **gcc/g++** - C/C++ compilers
+- **pkg-config** - Library configuration tool
+- **Development headers** (`.h` files) for all libraries
 
 ## Environment Variables
 
@@ -53,27 +106,20 @@ docker run --rm -it \
 
 ## Multi-Stage Build for Go Applications
 
-Use this image as a base for Go applications that need SpatiaLite and GDAL bindings.
-
-### Example: Go Application with go-gdal
+### Recommended: Alpine-based Build
 
 ```dockerfile
-# Build stage
-FROM golang:1.23-alpine AS builder
+# =============================================================================
+# Build stage - use the dev image with all headers and build tools
+# =============================================================================
+FROM registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-dev-latest AS builder
 
-# Install build dependencies for CGO
-RUN apk add --no-cache \
-    gcc \
-    musl-dev \
-    gdal-dev \
-    geos-dev \
-    proj-dev \
-    sqlite-dev \
-    libspatialite-dev
+# Install Go
+RUN apk add --no-cache go
 
 WORKDIR /app
 
-# Copy go module files
+# Copy go module files first (better layer caching)
 COPY go.mod go.sum ./
 RUN go mod download
 
@@ -81,90 +127,73 @@ RUN go mod download
 COPY . .
 
 # Build with CGO enabled
-RUN CGO_ENABLED=1 GOOS=linux go build -o /app/myapp .
+# The dev image has pkg-config set up correctly for all libraries
+RUN CGO_ENABLED=1 go build -o /app/myapp .
 
-# Runtime stage
+# =============================================================================
+# Runtime stage - use the minimal runtime image
+# =============================================================================
 FROM registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-latest
 
-# Copy the binary from builder
-COPY --from=builder /app/myapp /usr/local/bin/myapp
-
-# Set entrypoint
-ENTRYPOINT ["/usr/local/bin/myapp"]
-```
-
-### Example: Using lukeroth/gdal Go Bindings
-
-```dockerfile
-# Build stage
-FROM golang:1.23-alpine AS builder
-
-RUN apk add --no-cache \
-    gcc \
-    g++ \
-    musl-dev \
-    gdal-dev \
-    geos-dev \
-    proj-dev \
-    sqlite-dev \
-    libspatialite-dev \
-    pkgconfig
-
-WORKDIR /app
-
-COPY go.mod go.sum ./
-RUN go mod download
-
-COPY . .
-
-# Build with CGO for GDAL bindings
-RUN CGO_ENABLED=1 \
-    CGO_CFLAGS="$(pkg-config --cflags gdal)" \
-    CGO_LDFLAGS="$(pkg-config --libs gdal)" \
-    go build -o /app/myapp .
-
-# Runtime stage
-FROM registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-latest
-
+# Copy only the binary from builder
 COPY --from=builder /app/myapp /usr/local/bin/myapp
 
 ENTRYPOINT ["/usr/local/bin/myapp"]
 ```
 
-### Example: Ubuntu-based Build (for glibc compatibility)
+### Ubuntu-based Build (for glibc compatibility)
+
+Some Go libraries require glibc. Use the Ubuntu variants:
 
 ```dockerfile
 # Build stage
-FROM golang:1.23 AS builder
+FROM registry.gitlab.com/fieldworksdiary/spatialite-image:ubuntu-dev-latest AS builder
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    libgdal-dev \
-    libgeos-dev \
-    libproj-dev \
-    libsqlite3-dev \
-    libspatialite-dev \
-    pkg-config \
+# Install Go
+RUN apt-get update && apt-get install -y --no-install-recommends golang-go \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-
 COPY go.mod go.sum ./
 RUN go mod download
-
 COPY . .
-
 RUN CGO_ENABLED=1 go build -o /app/myapp .
 
 # Runtime stage
 FROM registry.gitlab.com/fieldworksdiary/spatialite-image:ubuntu-latest
 
 COPY --from=builder /app/myapp /usr/local/bin/myapp
-
 ENTRYPOINT ["/usr/local/bin/myapp"]
 ```
 
-### Go Code Example
+### Using Specific GDAL CGO Flags
+
+If you need explicit CGO flags (e.g., for [lukeroth/gdal](https://github.com/lukeroth/gdal)):
+
+```dockerfile
+FROM registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-dev-latest AS builder
+
+RUN apk add --no-cache go
+
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+
+# Use pkg-config to get the correct flags
+RUN CGO_ENABLED=1 \
+    CGO_CFLAGS="$(pkg-config --cflags gdal)" \
+    CGO_LDFLAGS="$(pkg-config --libs gdal)" \
+    go build -o /app/myapp .
+
+FROM registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-latest
+COPY --from=builder /app/myapp /usr/local/bin/myapp
+ENTRYPOINT ["/usr/local/bin/myapp"]
+```
+
+## Go Code Example
+
+### Using mattn/go-sqlite3 with SpatiaLite
 
 ```go
 package main
@@ -195,13 +224,15 @@ func main() {
     _, err = db.Exec(`
         CREATE TABLE IF NOT EXISTS locations (
             id INTEGER PRIMARY KEY,
-            name TEXT,
-            geom POINT
+            name TEXT
         )
     `)
     if err != nil {
         log.Fatal(err)
     }
+
+    // Add geometry column
+    db.Exec(`SELECT AddGeometryColumn('locations', 'geom', 4326, 'POINT', 'XY')`)
 
     // Insert a point
     _, err = db.Exec(`
@@ -226,36 +257,45 @@ func main() {
 }
 ```
 
-### go.mod Example
+### go.mod
 
 ```go
 module myapp
 
 go 1.23
 
-require (
-    github.com/mattn/go-sqlite3 v1.14.24
-)
+require github.com/mattn/go-sqlite3 v1.14.24
 ```
 
-## Building Locally
+## Building Images Locally
 
 ```bash
-# Build Alpine image
+# Build Alpine runtime
 docker build -f Dockerfile.alpine -t spatialite:alpine .
 
-# Build Ubuntu image
+# Build Alpine dev
+docker build -f Dockerfile.alpine-dev -t spatialite:alpine-dev .
+
+# Build Ubuntu runtime
 docker build -f Dockerfile.ubuntu -t spatialite:ubuntu .
 
-# Build multi-arch
-docker buildx build --platform linux/amd64,linux/arm64 -f Dockerfile.alpine -t spatialite:alpine .
+# Build Ubuntu dev
+docker build -f Dockerfile.ubuntu-dev -t spatialite:ubuntu-dev .
+
+# Multi-arch build
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -f Dockerfile.alpine -t spatialite:alpine .
 ```
 
 ## Testing
 
 ```bash
-# Run tests
+# Test runtime image
 docker run --rm -v $(pwd)/tests:/tests spatialite:alpine /tests/test-image.sh
+
+# Test dev image
+docker run --rm -v $(pwd)/tests:/tests spatialite:alpine-dev sh -c \
+  "/tests/test-image.sh && /tests/test-dev-image.sh"
 ```
 
 ## License

@@ -18,14 +18,35 @@ variables:
   - docker buildx create --use --name multiarch-builder --driver docker-container builder-context
   - docker buildx inspect --bootstrap
 
-# Build Ubuntu image for multiple architectures
-build:ubuntu:
+# Common job configuration
+.build-common:
   stage: build
   image: docker:24
   services:
     - docker:24-dind
   before_script:
     *buildx-setup
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_MERGE_REQUEST_ID
+
+.push-common:
+  stage: push
+  image: docker:24
+  services:
+    - docker:24-dind
+  before_script:
+    *buildx-setup
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# =============================================================================
+# BUILD STAGE
+# =============================================================================
+
+# Build Ubuntu runtime image
+build:ubuntu:
+  extends: .build-common
   script:
     - |
       docker buildx build \
@@ -34,18 +55,22 @@ build:ubuntu:
         --tag $REGISTRY:ubuntu-$CI_COMMIT_SHA \
         --push \
         .
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-    - if: $CI_MERGE_REQUEST_ID
 
-# Build Alpine image for multiple architectures
+# Build Ubuntu dev image
+build:ubuntu-dev:
+  extends: .build-common
+  script:
+    - |
+      docker buildx build \
+        --platform linux/amd64,linux/arm64 \
+        --file Dockerfile.ubuntu-dev \
+        --tag $REGISTRY:ubuntu-dev-$CI_COMMIT_SHA \
+        --push \
+        .
+
+# Build Alpine runtime image
 build:alpine:
-  stage: build
-  image: docker:24
-  services:
-    - docker:24-dind
-  before_script:
-    *buildx-setup
+  extends: .build-common
   script:
     - |
       docker buildx build \
@@ -54,11 +79,24 @@ build:alpine:
         --tag $REGISTRY:alpine-$CI_COMMIT_SHA \
         --push \
         .
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-    - if: $CI_MERGE_REQUEST_ID
 
-# Test Ubuntu image
+# Build Alpine dev image
+build:alpine-dev:
+  extends: .build-common
+  script:
+    - |
+      docker buildx build \
+        --platform linux/amd64,linux/arm64 \
+        --file Dockerfile.alpine-dev \
+        --tag $REGISTRY:alpine-dev-$CI_COMMIT_SHA \
+        --push \
+        .
+
+# =============================================================================
+# TEST STAGE
+# =============================================================================
+
+# Test Ubuntu runtime image
 test:ubuntu:
   stage: test
   image: $REGISTRY:ubuntu-$CI_COMMIT_SHA
@@ -71,7 +109,22 @@ test:ubuntu:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
     - if: $CI_MERGE_REQUEST_ID
 
-# Test Alpine image
+# Test Ubuntu dev image
+test:ubuntu-dev:
+  stage: test
+  image: $REGISTRY:ubuntu-dev-$CI_COMMIT_SHA
+  needs:
+    - build:ubuntu-dev
+  script:
+    - chmod +x tests/test-image.sh
+    - ./tests/test-image.sh
+    - chmod +x tests/test-dev-image.sh
+    - ./tests/test-dev-image.sh
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_MERGE_REQUEST_ID
+
+# Test Alpine runtime image
 test:alpine:
   stage: test
   image: $REGISTRY:alpine-$CI_COMMIT_SHA
@@ -84,16 +137,30 @@ test:alpine:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
     - if: $CI_MERGE_REQUEST_ID
 
-# Push final tags for Ubuntu
+# Test Alpine dev image
+test:alpine-dev:
+  stage: test
+  image: $REGISTRY:alpine-dev-$CI_COMMIT_SHA
+  needs:
+    - build:alpine-dev
+  script:
+    - chmod +x tests/test-image.sh
+    - ./tests/test-image.sh
+    - chmod +x tests/test-dev-image.sh
+    - ./tests/test-dev-image.sh
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_MERGE_REQUEST_ID
+
+# =============================================================================
+# PUSH STAGE
+# =============================================================================
+
+# Push Ubuntu runtime image
 push:ubuntu:
-  stage: push
-  image: docker:24
-  services:
-    - docker:24-dind
+  extends: .push-common
   needs:
     - test:ubuntu
-  before_script:
-    *buildx-setup
   script:
     - |
       docker buildx build \
@@ -103,19 +170,27 @@ push:ubuntu:
         --tag $REGISTRY:ubuntu-$CI_COMMIT_REF_SLUG \
         --push \
         .
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
-# Push final tags for Alpine
+# Push Ubuntu dev image
+push:ubuntu-dev:
+  extends: .push-common
+  needs:
+    - test:ubuntu-dev
+  script:
+    - |
+      docker buildx build \
+        --platform linux/amd64,linux/arm64 \
+        --file Dockerfile.ubuntu-dev \
+        --tag $REGISTRY:ubuntu-dev-latest \
+        --tag $REGISTRY:ubuntu-dev-$CI_COMMIT_REF_SLUG \
+        --push \
+        .
+
+# Push Alpine runtime image
 push:alpine:
-  stage: push
-  image: docker:24
-  services:
-    - docker:24-dind
+  extends: .push-common
   needs:
     - test:alpine
-  before_script:
-    *buildx-setup
   script:
     - |
       docker buildx build \
@@ -126,10 +201,27 @@ push:alpine:
         --tag $REGISTRY:latest \
         --push \
         .
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
-# Push version tags on release
+# Push Alpine dev image
+push:alpine-dev:
+  extends: .push-common
+  needs:
+    - test:alpine-dev
+  script:
+    - |
+      docker buildx build \
+        --platform linux/amd64,linux/arm64 \
+        --file Dockerfile.alpine-dev \
+        --tag $REGISTRY:alpine-dev-latest \
+        --tag $REGISTRY:alpine-dev-$CI_COMMIT_REF_SLUG \
+        --tag $REGISTRY:dev \
+        --push \
+        .
+
+# =============================================================================
+# RELEASE TAGS
+# =============================================================================
+
 push:release:
   stage: push
   image: docker:24
@@ -138,6 +230,7 @@ push:release:
   before_script:
     *buildx-setup
   script:
+    # Ubuntu runtime
     - |
       docker buildx build \
         --platform linux/amd64,linux/arm64 \
@@ -145,12 +238,30 @@ push:release:
         --tag $REGISTRY:ubuntu-$CI_COMMIT_TAG \
         --push \
         .
+    # Ubuntu dev
+    - |
+      docker buildx build \
+        --platform linux/amd64,linux/arm64 \
+        --file Dockerfile.ubuntu-dev \
+        --tag $REGISTRY:ubuntu-dev-$CI_COMMIT_TAG \
+        --push \
+        .
+    # Alpine runtime
     - |
       docker buildx build \
         --platform linux/amd64,linux/arm64 \
         --file Dockerfile.alpine \
         --tag $REGISTRY:alpine-$CI_COMMIT_TAG \
         --tag $REGISTRY:$CI_COMMIT_TAG \
+        --push \
+        .
+    # Alpine dev
+    - |
+      docker buildx build \
+        --platform linux/amd64,linux/arm64 \
+        --file Dockerfile.alpine-dev \
+        --tag $REGISTRY:alpine-dev-$CI_COMMIT_TAG \
+        --tag $REGISTRY:dev-$CI_COMMIT_TAG \
         --push \
         .
   rules:

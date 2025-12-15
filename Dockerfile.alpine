@@ -1,22 +1,19 @@
-# Alpine-based SpatiaLite image with GDAL, GEOS, librttopo
+# Alpine-based SpatiaLite runtime image with GDAL, GEOS, librttopo
+# Use this image for production deployments
 FROM alpine:3.20
 
 LABEL maintainer="fieldworksdiary"
-LABEL description="Alpine-based image with GDAL, SQLite, SpatiaLite, GEOS, librttopo"
+LABEL description="Alpine-based runtime image with GDAL, SQLite, SpatiaLite, GEOS, librttopo"
 
-# Install all spatial libraries from Alpine repositories
+# Install only runtime libraries (no -dev packages)
 RUN apk add --no-cache \
     gdal \
-    gdal-dev \
     gdal-tools \
     sqlite \
-    sqlite-dev \
     libspatialite \
-    libspatialite-dev \
     geos \
-    geos-dev \
     librttopo \
-    librttopo-dev \
+    proj \
     ca-certificates
 
 # Configure environment variables
