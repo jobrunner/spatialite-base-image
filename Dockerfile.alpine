@@ -10,11 +10,14 @@ RUN apk add --no-cache \
     gdal \
     gdal-tools \
     sqlite \
+    sqlite-libs \
     libspatialite \
     geos \
     librttopo \
     proj \
-    ca-certificates
+    ca-certificates \
+    # Create symlink for mod_spatialite (SQLite load_extension expects this name)
+    && ln -s /usr/lib/mod_spatialite.so.* /usr/lib/mod_spatialite.so 2>/dev/null || true
 
 # Configure environment variables
 ENV SPATIALITE_SECURITY=relaxed

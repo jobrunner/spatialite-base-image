@@ -7,27 +7,27 @@ LABEL description="Alpine-based dev image with GDAL, SQLite, SpatiaLite, GEOS, l
 
 # Install runtime libraries + development packages + build tools
 RUN apk add --no-cache \
-    # Runtime libraries
     gdal \
     gdal-tools \
     sqlite \
+    sqlite-libs \
     libspatialite \
     geos \
     librttopo \
     proj \
     ca-certificates \
-    # Development packages (headers + static libs)
     gdal-dev \
     sqlite-dev \
     libspatialite-dev \
     geos-dev \
     librttopo-dev \
     proj-dev \
-    # Build tools for CGO
     gcc \
     g++ \
     musl-dev \
-    pkgconfig
+    pkgconfig \
+    # Create symlink for mod_spatialite (SQLite load_extension expects this name)
+    && ln -s /usr/lib/mod_spatialite.so.* /usr/lib/mod_spatialite.so 2>/dev/null || true
 
 # Configure environment variables
 ENV SPATIALITE_SECURITY=relaxed

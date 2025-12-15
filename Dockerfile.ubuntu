@@ -9,16 +9,17 @@ LABEL description="Ubuntu-based runtime image with GDAL, SQLite, SpatiaLite, GEO
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install only runtime libraries (no -dev packages)
+# libsqlite3-mod-spatialite provides mod_spatialite.so
+# Dependencies are automatically pulled in
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gdal-bin \
-    libgdal35 \
-    libsqlite3-0 \
-    libsqlite3-mod-spatialite \
-    libspatialite8 \
-    libgeos-c1v5 \
-    librttopo1 \
-    libproj25 \
+    libgdal34t64 \
     sqlite3 \
+    libsqlite3-mod-spatialite \
+    libspatialite8t64 \
+    libgeos-c1t64 \
+    librttopo1t64 \
+    libproj25 \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 

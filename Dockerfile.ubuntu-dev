@@ -9,26 +9,18 @@ LABEL description="Ubuntu-based dev image with GDAL, SQLite, SpatiaLite, GEOS, l
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install runtime libraries + development packages + build tools
+# The -dev packages pull in matching runtime libraries automatically
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    # Runtime libraries
     gdal-bin \
-    libgdal35 \
-    libsqlite3-0 \
-    libsqlite3-mod-spatialite \
-    libspatialite8 \
-    libgeos-c1v5 \
-    librttopo1 \
-    libproj25 \
     sqlite3 \
+    libsqlite3-mod-spatialite \
     ca-certificates \
-    # Development packages (headers + static libs)
     libgdal-dev \
     libsqlite3-dev \
     libspatialite-dev \
     libgeos-dev \
     librttopo-dev \
     libproj-dev \
-    # Build tools for CGO
     gcc \
     g++ \
     pkg-config \
