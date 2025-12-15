@@ -9,7 +9,6 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Install all spatial libraries from Ubuntu repositories
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    # Core spatial libraries
     gdal-bin \
     libgdal-dev \
     libsqlite3-dev \
@@ -17,11 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libspatialite-dev \
     libgeos-dev \
     librttopo-dev \
-    # Python GDAL bindings (optional but useful)
-    python3-gdal \
-    # SQLite CLI
     sqlite3 \
-    # Utilities
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 

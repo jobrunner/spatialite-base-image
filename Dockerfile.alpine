@@ -17,7 +17,6 @@ RUN apk add --no-cache \
     geos-dev \
     librttopo \
     librttopo-dev \
-    py3-gdal \
     ca-certificates
 
 # Configure environment variables
