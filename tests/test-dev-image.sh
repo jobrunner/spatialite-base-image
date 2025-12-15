@@ -116,8 +116,10 @@ else
 fi
 
 # Test 14: Compile a simple C program that links against SpatiaLite
+# Note: sqlite3.h must be included BEFORE spatialite.h (spatialite headers use sqlite3 types)
 cat > /tmp/test_spatialite.c << 'EOF'
 #include <stdio.h>
+#include <sqlite3.h>
 #include <spatialite.h>
 
 int main() {
@@ -128,7 +130,6 @@ int main() {
 }
 EOF
 
-# SpatiaLite headers require sqlite3.h, so include both pkg-config packages
 if gcc /tmp/test_spatialite.c -o /tmp/test_spatialite $(pkg-config --cflags --libs spatialite sqlite3) 2>/dev/null; then
     test_result 0 "C program compiles and links against SpatiaLite"
     /tmp/test_spatialite
