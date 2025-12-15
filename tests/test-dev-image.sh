@@ -128,13 +128,14 @@ int main() {
 }
 EOF
 
-if gcc /tmp/test_spatialite.c -o /tmp/test_spatialite $(pkg-config --cflags --libs spatialite) 2>/dev/null; then
+# SpatiaLite headers require sqlite3.h, so include both pkg-config packages
+if gcc /tmp/test_spatialite.c -o /tmp/test_spatialite $(pkg-config --cflags --libs spatialite sqlite3) 2>/dev/null; then
     test_result 0 "C program compiles and links against SpatiaLite"
     /tmp/test_spatialite
 else
     test_result 1 "C program compiles and links against SpatiaLite"
     echo "  Compile error (trying verbose):"
-    gcc /tmp/test_spatialite.c -o /tmp/test_spatialite $(pkg-config --cflags --libs spatialite) 2>&1 | head -5
+    gcc /tmp/test_spatialite.c -o /tmp/test_spatialite $(pkg-config --cflags --libs spatialite sqlite3) 2>&1 | head -5
 fi
 
 # Test 15: Compile a simple C program that links against GDAL
