@@ -2,7 +2,7 @@
 # Use this image for production deployments
 FROM ubuntu:24.04
 
-LABEL maintainer="fieldworksdiary"
+LABEL maintainer="jobrunner"
 LABEL description="Ubuntu-based runtime image with GDAL, SQLite, SpatiaLite, GEOS, librttopo"
 
 # Prevent interactive prompts during package installation

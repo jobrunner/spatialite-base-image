@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2025-12-17
+
+### Changed
+
+- Migrated CI/CD from GitLab CI to GitHub Actions
+- Changed container registry from GitLab Registry to GitHub Container Registry (ghcr.io)
+- Repository moved to `github.com/jobrunner/spatialite-base-image`
+- Images now available at `ghcr.io/jobrunner/spatialite-base-image`
+
 ## [1.0.0] - 2025-12-15
 
 ### Added
@@ -33,4 +42,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PROJ 9.4.x
 - librttopo 1.1.0
 
-[1.0.0]: https://gitlab.com/fieldworksdiary/spatialite-image/-/releases/v1.0.0
+[1.1.0]: https://github.com/jobrunner/spatialite-base-image/releases/tag/v1.1.0
+[1.0.0]: https://github.com/jobrunner/spatialite-base-image/releases/tag/v1.0.0

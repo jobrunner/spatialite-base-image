@@ -22,9 +22,9 @@ Images use semantic versioning. When you tag a release `v1.2.3`, the following t
 Minimal images containing only runtime libraries. Use these for your final production containers.
 
 ```
-registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-1.2.3
-registry.gitlab.com/fieldworksdiary/spatialite-image:ubuntu-1.2.3
-registry.gitlab.com/fieldworksdiary/spatialite-image:1.2.3          # Alpine (default)
+ghcr.io/jobrunner/spatialite-base-image:alpine-1.2.3
+ghcr.io/jobrunner/spatialite-base-image:ubuntu-1.2.3
+ghcr.io/jobrunner/spatialite-base-image:1.2.3          # Alpine (default)
 ```
 
 | Base | Tags |
@@ -37,9 +37,9 @@ registry.gitlab.com/fieldworksdiary/spatialite-image:1.2.3          # Alpine (de
 Images with development headers, pkg-config files, and build tools (gcc, g++). Use these to compile applications with CGO bindings.
 
 ```
-registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-dev-1.2.3
-registry.gitlab.com/fieldworksdiary/spatialite-image:ubuntu-dev-1.2.3
-registry.gitlab.com/fieldworksdiary/spatialite-image:dev-1.2.3       # Alpine (default)
+ghcr.io/jobrunner/spatialite-base-image:alpine-dev-1.2.3
+ghcr.io/jobrunner/spatialite-base-image:ubuntu-dev-1.2.3
+ghcr.io/jobrunner/spatialite-base-image:dev-1.2.3       # Alpine (default)
 ```
 
 | Base | Tags |
@@ -71,11 +71,11 @@ Use matching dev/runtime image pairs from this repository with the **same versio
 
 ```dockerfile
 # BUILD with dev image
-FROM registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-dev-1.0.0 AS builder
+FROM ghcr.io/jobrunner/spatialite-base-image:alpine-dev-1.0.0 AS builder
 # ... install Go, build ...
 
 # RUN with matching runtime image (same version!)
-FROM registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-1.0.0
+FROM ghcr.io/jobrunner/spatialite-base-image:alpine-1.0.0
 COPY --from=builder /app/myapp .
 ```
 
@@ -111,7 +111,7 @@ LD_LIBRARY_PATH=/usr/lib:/usr/local/lib
 
 ```bash
 # Run SQLite with SpatiaLite
-docker run --rm -it registry.gitlab.com/fieldworksdiary/spatialite-image:1.0.0
+docker run --rm -it ghcr.io/jobrunner/spatialite-base-image:1.0.0
 
 # Load SpatiaLite extension
 sqlite> SELECT load_extension('mod_spatialite');
@@ -123,7 +123,7 @@ sqlite> SELECT spatialite_version();
 ```bash
 docker run --rm -it \
   -v $(pwd)/data:/data \
-  registry.gitlab.com/fieldworksdiary/spatialite-image:1.0.0 \
+  ghcr.io/jobrunner/spatialite-base-image:1.0.0 \
   sqlite3 /data/mydb.sqlite
 ```
 
@@ -135,7 +135,7 @@ docker run --rm -it \
 # =============================================================================
 # Build stage - use the dev image with all headers and build tools
 # =============================================================================
-FROM registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-dev-1.0.0 AS builder
+FROM ghcr.io/jobrunner/spatialite-base-image:alpine-dev-1.0.0 AS builder
 
 # Install Go
 RUN apk add --no-cache go
@@ -156,7 +156,7 @@ RUN CGO_ENABLED=1 go build -o /app/myapp .
 # =============================================================================
 # Runtime stage - use the minimal runtime image (SAME VERSION!)
 # =============================================================================
-FROM registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-1.0.0
+FROM ghcr.io/jobrunner/spatialite-base-image:alpine-1.0.0
 
 # Copy only the binary from builder
 COPY --from=builder /app/myapp /usr/local/bin/myapp
@@ -170,7 +170,7 @@ Some Go libraries require glibc. Use the Ubuntu variants:
 
 ```dockerfile
 # Build stage
-FROM registry.gitlab.com/fieldworksdiary/spatialite-image:ubuntu-dev-1.0.0 AS builder
+FROM ghcr.io/jobrunner/spatialite-base-image:ubuntu-dev-1.0.0 AS builder
 
 # Install Go
 RUN apt-get update && apt-get install -y --no-install-recommends golang-go \
@@ -183,7 +183,7 @@ COPY . .
 RUN CGO_ENABLED=1 go build -o /app/myapp .
 
 # Runtime stage (SAME VERSION!)
-FROM registry.gitlab.com/fieldworksdiary/spatialite-image:ubuntu-1.0.0
+FROM ghcr.io/jobrunner/spatialite-base-image:ubuntu-1.0.0
 
 COPY --from=builder /app/myapp /usr/local/bin/myapp
 ENTRYPOINT ["/usr/local/bin/myapp"]
@@ -194,7 +194,7 @@ ENTRYPOINT ["/usr/local/bin/myapp"]
 If you need explicit CGO flags (e.g., for [lukeroth/gdal](https://github.com/lukeroth/gdal)):
 
 ```dockerfile
-FROM registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-dev-1.0.0 AS builder
+FROM ghcr.io/jobrunner/spatialite-base-image:alpine-dev-1.0.0 AS builder
 
 RUN apk add --no-cache go
 
@@ -209,7 +209,7 @@ RUN CGO_ENABLED=1 \
     CGO_LDFLAGS="$(pkg-config --libs gdal)" \
     go build -o /app/myapp .
 
-FROM registry.gitlab.com/fieldworksdiary/spatialite-image:alpine-1.0.0
+FROM ghcr.io/jobrunner/spatialite-base-image:alpine-1.0.0
 COPY --from=builder /app/myapp /usr/local/bin/myapp
 ENTRYPOINT ["/usr/local/bin/myapp"]
 ```
@@ -325,7 +325,7 @@ docker run --rm -v $(pwd)/tests:/tests spatialite:alpine-dev sh -c \
 
 ### Branch Protection
 
-Direct commits to `master` are not allowed. All changes must go through a Merge Request.
+Direct commits to `main` are not allowed. All changes must go through a Pull Request.
 
 ### Creating a Release
 
@@ -341,25 +341,17 @@ Direct commits to `master` are not allowed. All changes must go through a Merge 
 
 3. **Update CHANGELOG.md** with your changes
 
-4. **Push and create Merge Request:**
+4. **Push and create Pull Request:**
    ```bash
    git push -u origin feature/my-change
    ```
 
-5. **Wait for pipeline to pass** (build + test)
+5. **Wait for CI to pass** (build + test)
 
-6. **Merge to master** - this automatically:
+6. **Merge to main** - this automatically:
    - Creates a git tag `v1.1.0` from VERSION file
    - Builds and pushes all Docker image tags
-   - Creates a GitLab Release with CHANGELOG
-
-### Setup Required
-
-To enable automatic tagging, create a Project Access Token in GitLab:
-
-1. Go to **Settings → Access Tokens**
-2. Create token with `api` and `write_repository` scopes
-3. Add as CI/CD variable `GITLAB_TOKEN` in **Settings → CI/CD → Variables**
+   - Creates a GitHub Release with CHANGELOG
 
 ## License
 

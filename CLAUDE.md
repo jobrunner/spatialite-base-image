@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Multi-architecture Docker images (amd64/arm64) providing GDAL, SQLite, SpatiaLite, GEOS, and librttopo on Ubuntu and Alpine base images. Images are published to GitLab Container Registry.
+Multi-architecture Docker images (amd64/arm64) providing GDAL, SQLite, SpatiaLite, GEOS, and librttopo on Ubuntu and Alpine base images. Images are published to GitHub Container Registry (ghcr.io).
 
 ## Image Types
 
@@ -44,7 +44,8 @@ docker run --rm -v $(pwd)/tests:/tests spatialite:alpine-dev sh -c \
 - `Dockerfile.alpine-dev` - Alpine 3.20 dev image (with headers, gcc, pkg-config)
 - `Dockerfile.ubuntu` - Ubuntu 24.04 runtime image
 - `Dockerfile.ubuntu-dev` - Ubuntu 24.04 dev image (with headers, gcc, pkg-config)
-- `.gitlab-ci.yml` - CI/CD pipeline (build → test → tag → release)
+- `.github/workflows/ci.yml` - CI pipeline (build → test → tag on main)
+- `.github/workflows/release.yml` - Release pipeline (triggered by version tags)
 - `tests/test-image.sh` - Runtime tests (library loading, spatial operations)
 - `tests/test-dev-image.sh` - Dev tests (headers, pkg-config, compilation)
 - `VERSION` - Current version number (used for auto-tagging)
@@ -69,18 +70,14 @@ Images use semantic versioning (X.Y.Z). Tags created:
 
 ## Development Workflow
 
-1. Create feature branch from master
+1. Create feature branch from main
 2. Make changes, update `VERSION` and `CHANGELOG.md`
-3. Push and create Merge Request
-4. Pipeline runs: build → test
-5. After merge to master: auto-tag → release pipeline → GitLab Release
+3. Push and create Pull Request
+4. CI runs: build → test
+5. After merge to main: auto-tag → release workflow → GitHub Release
 
-**Important:** Direct commits to master are not allowed. Use Merge Requests.
-
-## CI/CD Variables Required
-
-- `GITLAB_TOKEN` - Project Access Token with `api` and `write_repository` scopes (for auto-tagging)
+**Important:** Direct commits to main are not allowed. Use Pull Requests.
 
 ## Registry
 
-`registry.gitlab.com/fieldworksdiary/spatialite-image`
+`ghcr.io/jobrunner/spatialite-base-image`
