@@ -1,13 +1,13 @@
-name: Release
+name: Manual Release
+
+# This workflow is for manual/emergency releases only.
+# Normal releases happen automatically via CI when merging to main.
 
 on:
-  push:
-    tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to release (e.g., 1.0.0)'
+        description: 'Version to release (e.g., 1.0.0) - must match VERSION file'
         required: true
         type: string
 
@@ -16,7 +16,28 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate input matches VERSION file
+        run: |
+          FILE_VERSION=$(cat VERSION | tr -d '[:space:]')
+          INPUT_VERSION="${{ inputs.version }}"
+
+          if [ "$FILE_VERSION" != "$INPUT_VERSION" ]; then
+            echo "::error::Input version ($INPUT_VERSION) does not match VERSION file ($FILE_VERSION)"
+            exit 1
+          fi
+
+          echo "✓ Version $INPUT_VERSION matches VERSION file"
+
   release:
+    needs: validate
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -27,14 +48,18 @@ jobs:
           - dockerfile: Dockerfile.ubuntu
             tag_prefix: ubuntu
             is_default: false
+            is_default_dev: false
           - dockerfile: Dockerfile.ubuntu-dev
             tag_prefix: ubuntu-dev
             is_default: false
+            is_default_dev: false
           - dockerfile: Dockerfile.alpine
             tag_prefix: alpine
             is_default: true
+            is_default_dev: false
           - dockerfile: Dockerfile.alpine-dev
             tag_prefix: alpine-dev
+            is_default: false
             is_default_dev: true
 
     steps:
@@ -54,14 +79,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract version
+      - name: Extract version parts
         id: version
         run: |
-          if [ -n "${{ inputs.version }}" ]; then
-            VERSION="${{ inputs.version }}"
-          else
-            VERSION=${GITHUB_REF_NAME#v}
-          fi
+          VERSION="${{ inputs.version }}"
           MAJOR=$(echo $VERSION | cut -d. -f1)
           MINOR=$(echo $VERSION | cut -d. -f2)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -117,7 +138,7 @@ jobs:
           provenance: false
 
   create-release:
-    needs: release
+    needs: [validate, release]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -126,24 +147,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Extract version
-        id: version
-        run: |
-          if [ -n "${{ inputs.version }}" ]; then
-            VERSION="${{ inputs.version }}"
-          else
-            VERSION=${GITHUB_REF_NAME#v}
-          fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-
       - name: Extract release notes from CHANGELOG
         id: changelog
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          # Extract section for this version (between ## [X.Y.Z] and the next ## [)
+          VERSION="${{ inputs.version }}"
           NOTES=$(awk "/^## \\[${VERSION}\\]/{flag=1; next} /^## \\[/{flag=0} flag" CHANGELOG.md)
 
-          # Handle multi-line output
           {
             echo "notes<<EOF"
             echo "$NOTES"
@@ -153,8 +162,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          name: v${{ steps.version.outputs.version }}
-          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ inputs.version }}
+          tag_name: v${{ inputs.version }}
           body: |
             ## What's Changed
 
@@ -165,19 +174,19 @@ jobs:
             ```bash
             # Alpine (default)
             docker pull ghcr.io/${{ github.repository }}:latest
-            docker pull ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}
+            docker pull ghcr.io/${{ github.repository }}:${{ inputs.version }}
 
             # Ubuntu
             docker pull ghcr.io/${{ github.repository }}:ubuntu-latest
-            docker pull ghcr.io/${{ github.repository }}:ubuntu-${{ steps.version.outputs.version }}
+            docker pull ghcr.io/${{ github.repository }}:ubuntu-${{ inputs.version }}
 
             # Development images (Alpine)
             docker pull ghcr.io/${{ github.repository }}:dev
-            docker pull ghcr.io/${{ github.repository }}:dev-${{ steps.version.outputs.version }}
+            docker pull ghcr.io/${{ github.repository }}:dev-${{ inputs.version }}
 
             # Development images (Ubuntu)
             docker pull ghcr.io/${{ github.repository }}:ubuntu-dev-latest
-            docker pull ghcr.io/${{ github.repository }}:ubuntu-dev-${{ steps.version.outputs.version }}
+            docker pull ghcr.io/${{ github.repository }}:ubuntu-dev-${{ inputs.version }}
             ```
 
             See [Container Registry](https://github.com/${{ github.repository }}/pkgs/container/spatialite-base-image) for all available tags.

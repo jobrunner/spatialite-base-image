@@ -12,9 +12,131 @@ env:
 
 jobs:
   # =============================================================================
-  # BUILD STAGE
+  # VALIDATION STAGE - Runs always first
+  # =============================================================================
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      major: ${{ steps.version.outputs.major }}
+      minor: ${{ steps.version.outputs.minor }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate VERSION format (SemVer)
+        id: version
+        run: |
+          VERSION=$(cat VERSION | tr -d '[:space:]')
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+          # Check SemVer format (X.Y.Z)
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::VERSION '$VERSION' is not valid SemVer format (expected X.Y.Z)"
+            exit 1
+          fi
+
+          MAJOR=$(echo $VERSION | cut -d. -f1)
+          MINOR=$(echo $VERSION | cut -d. -f2)
+          echo "major=$MAJOR" >> $GITHUB_OUTPUT
+          echo "minor=$MINOR" >> $GITHUB_OUTPUT
+
+          echo "✓ VERSION $VERSION is valid SemVer"
+
+      - name: Validate VERSION does not exist as tag
+        run: |
+          VERSION=$(cat VERSION | tr -d '[:space:]')
+          TAG="v${VERSION}"
+
+          if git ls-remote --tags origin | grep -q "refs/tags/${TAG}$"; then
+            echo "::error::Tag $TAG already exists. Please increment VERSION."
+            exit 1
+          fi
+
+          echo "✓ Tag $TAG does not exist yet"
+
+      - name: Validate CHANGELOG has entry for VERSION
+        run: |
+          VERSION=$(cat VERSION | tr -d '[:space:]')
+
+          if ! grep -q "^## \[${VERSION}\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no entry for version $VERSION"
+            echo "Expected a line like: ## [$VERSION] - YYYY-MM-DD"
+            exit 1
+          fi
+
+          echo "✓ CHANGELOG.md has entry for version $VERSION"
+
+  # =============================================================================
+  # PR: BUILD AND TEST (no push, local images only)
+  # =============================================================================
+  pr-build-and-test:
+    needs: validate
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - dockerfile: Dockerfile.alpine
+            image_name: alpine
+            dev: false
+          - dockerfile: Dockerfile.alpine-dev
+            image_name: alpine-dev
+            dev: true
+          - dockerfile: Dockerfile.ubuntu
+            image_name: ubuntu
+            dev: false
+          - dockerfile: Dockerfile.ubuntu-dev
+            image_name: ubuntu-dev
+            dev: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: spatialite:${{ matrix.image_name }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+
+      - name: Test runtime image
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}/tests:/tests \
+            spatialite:${{ matrix.image_name }} \
+            /tests/test-image.sh
+
+      - name: Test dev image
+        if: matrix.dev
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}/tests:/tests \
+            spatialite:${{ matrix.image_name }} \
+            /tests/test-dev-image.sh
+
+  # =============================================================================
+  # MERGE: BUILD AND PUSH (multi-arch with SemVer tags)
   # =============================================================================
   build:
+    needs: validate
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -23,13 +145,21 @@ jobs:
       matrix:
         include:
           - dockerfile: Dockerfile.ubuntu
-            tag_suffix: ubuntu
+            tag_prefix: ubuntu
+            is_default: false
+            is_default_dev: false
           - dockerfile: Dockerfile.ubuntu-dev
-            tag_suffix: ubuntu-dev
+            tag_prefix: ubuntu-dev
+            is_default: false
+            is_default_dev: false
           - dockerfile: Dockerfile.alpine
-            tag_suffix: alpine
+            tag_prefix: alpine
+            is_default: true
+            is_default_dev: false
           - dockerfile: Dockerfile.alpine-dev
-            tag_suffix: alpine-dev
+            tag_prefix: alpine-dev
+            is_default: false
+            is_default_dev: true
 
     steps:
       - name: Checkout
@@ -48,23 +178,60 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push
+      - name: Build and push (standard tags)
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ${{ matrix.dockerfile }}
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.tag_suffix }}-${{ github.sha }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.tag_prefix }}-${{ needs.validate.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.tag_prefix }}-${{ needs.validate.outputs.major }}.${{ needs.validate.outputs.minor }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.tag_prefix }}-${{ needs.validate.outputs.major }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.tag_prefix }}-latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: false
 
+      - name: Build and push (default Alpine tags)
+        if: matrix.is_default == true
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.validate.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.validate.outputs.major }}.${{ needs.validate.outputs.minor }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.validate.outputs.major }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          cache-from: type=gha
+          provenance: false
+
+      - name: Build and push (default dev tags)
+        if: matrix.is_default_dev == true
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:dev-${{ needs.validate.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:dev-${{ needs.validate.outputs.major }}.${{ needs.validate.outputs.minor }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:dev-${{ needs.validate.outputs.major }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:dev
+          cache-from: type=gha
+          provenance: false
+
   # =============================================================================
-  # TEST STAGE
+  # MERGE: TEST (on pushed images)
   # =============================================================================
   test:
-    needs: build
+    needs: [validate, build]
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -93,7 +260,7 @@ jobs:
         run: |
           docker run --rm \
             -v ${{ github.workspace }}/tests:/tests \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.image_suffix }}-${{ github.sha }} \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.image_suffix }}-${{ needs.validate.outputs.version }} \
             /tests/test-image.sh
 
       - name: Test dev image
@@ -101,21 +268,18 @@ jobs:
         run: |
           docker run --rm \
             -v ${{ github.workspace }}/tests:/tests \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.image_suffix }}-${{ github.sha }} \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.image_suffix }}-${{ needs.validate.outputs.version }} \
             /tests/test-dev-image.sh
 
   # =============================================================================
-  # TAG STAGE (only on main/master branch)
+  # MERGE: RELEASE (create git tag and GitHub release)
   # =============================================================================
-  tag:
-    needs: test
+  release:
+    needs: [validate, test]
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
     permissions:
       contents: write
-    outputs:
-      new_tag: ${{ steps.check_tag.outputs.new_tag }}
-      version: ${{ steps.check_tag.outputs.version }}
 
     steps:
       - name: Checkout
@@ -123,27 +287,56 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check if tag exists
-        id: check_tag
+      - name: Create git tag
         run: |
-          VERSION=$(cat VERSION | tr -d '[:space:]')
-          TAG="v${VERSION}"
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-
-          if git ls-remote --tags origin | grep -q "refs/tags/${TAG}$"; then
-            echo "Tag $TAG already exists, skipping"
-            echo "new_tag=false" >> $GITHUB_OUTPUT
-          else
-            echo "Tag $TAG does not exist, will create"
-            echo "new_tag=true" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Create tag
-        if: steps.check_tag.outputs.new_tag == 'true'
-        run: |
-          VERSION=$(cat VERSION | tr -d '[:space:]')
+          VERSION="${{ needs.validate.outputs.version }}"
           TAG="v${VERSION}"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
           git tag -a "${TAG}" -m "Release ${VERSION}"
           git push origin "${TAG}"
+
+      - name: Extract release notes from CHANGELOG
+        id: changelog
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          NOTES=$(awk "/^## \\[${VERSION}\\]/{flag=1; next} /^## \\[/{flag=0} flag" CHANGELOG.md)
+
+          {
+            echo "notes<<EOF"
+            echo "$NOTES"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: v${{ needs.validate.outputs.version }}
+          tag_name: v${{ needs.validate.outputs.version }}
+          body: |
+            ## What's Changed
+
+            ${{ steps.changelog.outputs.notes }}
+
+            ## Docker Images
+
+            ```bash
+            # Alpine (default)
+            docker pull ghcr.io/${{ github.repository }}:latest
+            docker pull ghcr.io/${{ github.repository }}:${{ needs.validate.outputs.version }}
+
+            # Ubuntu
+            docker pull ghcr.io/${{ github.repository }}:ubuntu-latest
+            docker pull ghcr.io/${{ github.repository }}:ubuntu-${{ needs.validate.outputs.version }}
+
+            # Development images (Alpine)
+            docker pull ghcr.io/${{ github.repository }}:dev
+            docker pull ghcr.io/${{ github.repository }}:dev-${{ needs.validate.outputs.version }}
+
+            # Development images (Ubuntu)
+            docker pull ghcr.io/${{ github.repository }}:ubuntu-dev-latest
+            docker pull ghcr.io/${{ github.repository }}:ubuntu-dev-${{ needs.validate.outputs.version }}
+            ```
+
+            See [Container Registry](https://github.com/${{ github.repository }}/pkgs/container/spatialite-base-image) for all available tags.
+          generate_release_notes: false
