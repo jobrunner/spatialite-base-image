@@ -1,5 +1,9 @@
 # SpatiaLite Docker Images
 
+[![CI](https://github.com/jobrunner/spatialite-base-image/actions/workflows/ci.yml/badge.svg)](https://github.com/jobrunner/spatialite-base-image/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/jobrunner/spatialite-base-image?label=version)](https://github.com/jobrunner/spatialite-base-image/releases)
+[![Container Registry](https://img.shields.io/badge/ghcr.io-packages-blue)](https://github.com/jobrunner/spatialite-base-image/pkgs/container/spatialite-base-image)
+
 Multi-architecture Docker images (amd64/arm64) with GDAL, SQLite, SpatiaLite, GEOS, and librttopo.
 
 ## Images
