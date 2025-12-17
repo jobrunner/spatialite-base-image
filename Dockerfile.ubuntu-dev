@@ -1,6 +1,6 @@
 # Ubuntu-based SpatiaLite development image with GDAL, GEOS, librttopo
 # Use this image for building applications with CGO bindings
-FROM ubuntu:24.04
+FROM ubuntu:26.04
 
 LABEL maintainer="jobrunner"
 LABEL description="Ubuntu-based dev image with GDAL, SQLite, SpatiaLite, GEOS, librttopo (includes headers)"

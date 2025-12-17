@@ -1,6 +1,6 @@
 # Alpine-based SpatiaLite runtime image with GDAL, GEOS, librttopo
 # Use this image for production deployments
-FROM alpine:3.20
+FROM alpine:3.21
 
 LABEL maintainer="jobrunner"
 LABEL description="Alpine-based runtime image with GDAL, SQLite, SpatiaLite, GEOS, librttopo"

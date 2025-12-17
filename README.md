@@ -33,8 +33,8 @@ ghcr.io/jobrunner/spatialite-base-image:1.2.3          # Alpine (default)
 
 | Base | Tags |
 |------|------|
-| Alpine 3.20 | `alpine-X.Y.Z`, `alpine-X.Y`, `alpine-X`, `alpine-latest`, `X.Y.Z`, `X.Y`, `X`, `latest` |
-| Ubuntu 24.04 | `ubuntu-X.Y.Z`, `ubuntu-X.Y`, `ubuntu-X`, `ubuntu-latest` |
+| Alpine 3.21 | `alpine-X.Y.Z`, `alpine-X.Y`, `alpine-X`, `alpine-latest`, `X.Y.Z`, `X.Y`, `X`, `latest` |
+| Ubuntu 26.04 | `ubuntu-X.Y.Z`, `ubuntu-X.Y`, `ubuntu-X`, `ubuntu-latest` |
 
 ### Development Images (for Building)
 
@@ -48,8 +48,8 @@ ghcr.io/jobrunner/spatialite-base-image:dev-1.2.3       # Alpine (default)
 
 | Base | Tags |
 |------|------|
-| Alpine 3.20 | `alpine-dev-X.Y.Z`, `alpine-dev-X.Y`, `alpine-dev-X`, `alpine-dev-latest`, `dev-X.Y.Z`, `dev-X.Y`, `dev-X`, `dev` |
-| Ubuntu 24.04 | `ubuntu-dev-X.Y.Z`, `ubuntu-dev-X.Y`, `ubuntu-dev-X`, `ubuntu-dev-latest` |
+| Alpine 3.21 | `alpine-dev-X.Y.Z`, `alpine-dev-X.Y`, `alpine-dev-X`, `alpine-dev-latest`, `dev-X.Y.Z`, `dev-X.Y`, `dev-X`, `dev` |
+| Ubuntu 26.04 | `ubuntu-dev-X.Y.Z`, `ubuntu-dev-X.Y`, `ubuntu-dev-X`, `ubuntu-dev-latest` |
 
 ## Why Separate Dev and Runtime Images?
 

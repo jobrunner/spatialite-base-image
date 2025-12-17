@@ -1,6 +1,6 @@
 # Alpine-based SpatiaLite development image with GDAL, GEOS, librttopo
 # Use this image for building applications with CGO bindings
-FROM alpine:3.20
+FROM alpine:3.21
 
 LABEL maintainer="jobrunner"
 LABEL description="Alpine-based dev image with GDAL, SQLite, SpatiaLite, GEOS, librttopo (includes headers)"
