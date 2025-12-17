@@ -101,6 +101,13 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.tag_prefix }}-${{ steps.version.outputs.major }}.${{ steps.version.outputs.minor }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.tag_prefix }}-${{ steps.version.outputs.major }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.tag_prefix }}-latest
+          labels: |
+            org.opencontainers.image.title=spatialite-base-image
+            org.opencontainers.image.description=Multi-arch Docker image with GDAL, SQLite, SpatiaLite, GEOS, librttopo
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.licenses=GPL-2.0-or-later
+            org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: false
@@ -118,6 +125,13 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.major }}.${{ steps.version.outputs.minor }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.major }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          labels: |
+            org.opencontainers.image.title=spatialite-base-image
+            org.opencontainers.image.description=Multi-arch Docker image with GDAL, SQLite, SpatiaLite, GEOS, librttopo
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.licenses=GPL-2.0-or-later
+            org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha
           provenance: false
 
@@ -134,6 +148,13 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:dev-${{ steps.version.outputs.major }}.${{ steps.version.outputs.minor }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:dev-${{ steps.version.outputs.major }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:dev
+          labels: |
+            org.opencontainers.image.title=spatialite-base-image
+            org.opencontainers.image.description=Multi-arch Docker image with GDAL, SQLite, SpatiaLite, GEOS, librttopo (dev)
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.licenses=GPL-2.0-or-later
+            org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha
           provenance: false
 
