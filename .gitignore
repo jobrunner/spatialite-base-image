@@ -1,1 +1,7 @@
+# Claude Code local settings
 .claude/settings.local.*
+
+# Nix
+result
+result-*
+.direnv/

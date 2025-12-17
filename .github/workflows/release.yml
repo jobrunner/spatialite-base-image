@@ -82,6 +82,7 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.tag_prefix }}-latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: false
 
       - name: Build and push (default Alpine tags)
         if: matrix.is_default == true
@@ -97,6 +98,7 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.major }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           cache-from: type=gha
+          provenance: false
 
       - name: Build and push (default dev tags)
         if: matrix.is_default_dev == true
@@ -112,6 +114,7 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:dev-${{ steps.version.outputs.major }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:dev
           cache-from: type=gha
+          provenance: false
 
   create-release:
     needs: release
@@ -123,8 +126,59 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Extract version
+        id: version
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION=${GITHUB_REF_NAME#v}
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Extract release notes from CHANGELOG
+        id: changelog
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          # Extract section for this version (between ## [X.Y.Z] and the next ## [)
+          NOTES=$(awk "/^## \\[${VERSION}\\]/{flag=1; next} /^## \\[/{flag=0} flag" CHANGELOG.md)
+
+          # Handle multi-line output
+          {
+            echo "notes<<EOF"
+            echo "$NOTES"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          body_path: CHANGELOG.md
+          name: v${{ steps.version.outputs.version }}
+          tag_name: v${{ steps.version.outputs.version }}
+          body: |
+            ## What's Changed
+
+            ${{ steps.changelog.outputs.notes }}
+
+            ## Docker Images
+
+            ```bash
+            # Alpine (default)
+            docker pull ghcr.io/${{ github.repository }}:latest
+            docker pull ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}
+
+            # Ubuntu
+            docker pull ghcr.io/${{ github.repository }}:ubuntu-latest
+            docker pull ghcr.io/${{ github.repository }}:ubuntu-${{ steps.version.outputs.version }}
+
+            # Development images (Alpine)
+            docker pull ghcr.io/${{ github.repository }}:dev
+            docker pull ghcr.io/${{ github.repository }}:dev-${{ steps.version.outputs.version }}
+
+            # Development images (Ubuntu)
+            docker pull ghcr.io/${{ github.repository }}:ubuntu-dev-latest
+            docker pull ghcr.io/${{ github.repository }}:ubuntu-dev-${{ steps.version.outputs.version }}
+            ```
+
+            See [Container Registry](https://github.com/${{ github.repository }}/pkgs/container/spatialite-base-image) for all available tags.
           generate_release_notes: false
