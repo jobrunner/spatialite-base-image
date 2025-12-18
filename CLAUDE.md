@@ -40,10 +40,10 @@ docker run --rm -v $(pwd)/tests:/tests spatialite:alpine-dev sh -c \
 
 ## File Structure
 
-- `Dockerfile.alpine` - Alpine 3.20 runtime image
-- `Dockerfile.alpine-dev` - Alpine 3.20 dev image (with headers, gcc, pkg-config)
-- `Dockerfile.ubuntu` - Ubuntu 24.04 runtime image
-- `Dockerfile.ubuntu-dev` - Ubuntu 24.04 dev image (with headers, gcc, pkg-config)
+- `Dockerfile.alpine` - Alpine 3.21 runtime image
+- `Dockerfile.alpine-dev` - Alpine 3.21 dev image (with headers, gcc, pkg-config)
+- `Dockerfile.ubuntu` - Ubuntu 26.04 runtime image
+- `Dockerfile.ubuntu-dev` - Ubuntu 26.04 dev image (with headers, gcc, pkg-config)
 - `.github/workflows/ci.yml` - CI pipeline (build → test → tag on main)
 - `.github/workflows/release.yml` - Release pipeline (triggered by version tags)
 - `tests/test-image.sh` - Runtime tests (library loading, spatial operations)
@@ -77,6 +77,35 @@ Images use semantic versioning (X.Y.Z). Tags created:
 5. After merge to main: auto-tag → release workflow → GitHub Release
 
 **Important:** Direct commits to main are not allowed. Use Pull Requests.
+
+## Security Hardening
+
+All images include security hardening measures:
+
+- **Non-root user**: Images run as `spatialite` user (UID 10001) by default
+- **No SUID/SGID**: All SUID/SGID bits are removed from binaries
+- **Minimal attack surface**: Only required packages are installed
+
+### Running as root (dev images)
+
+Dev images default to non-root but can be overridden for development tasks:
+
+```bash
+docker run --user root -it spatialite:alpine-dev sh
+```
+
+### Additional runtime security
+
+For production deployments, consider these docker run flags:
+
+```bash
+docker run --rm \
+  --read-only \
+  --security-opt=no-new-privileges:true \
+  --cap-drop=ALL \
+  -v $(pwd)/data:/data \
+  spatialite:alpine
+```
 
 ## Registry
 

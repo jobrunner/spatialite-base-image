@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2025-12-18
+
+### Added
+
+- Security hardening for all images:
+  - Non-root user `spatialite` (UID 10001) runs by default
+  - SUID/SGID bits removed from all binaries
+- Security documentation in README.md and CLAUDE.md
+
+### Changed
+
+- Dev images now also run as non-root by default (override with `--user root`)
+
 ## [1.3.1] - 2025-12-17
 
 ### Added
@@ -68,6 +81,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PROJ 9.4.x
 - librttopo 1.1.0
 
+[1.4.0]: https://github.com/jobrunner/spatialite-base-image/releases/tag/v1.4.0
 [1.3.1]: https://github.com/jobrunner/spatialite-base-image/releases/tag/v1.3.1
 [1.3.0]: https://github.com/jobrunner/spatialite-base-image/releases/tag/v1.3.0
 [1.2.0]: https://github.com/jobrunner/spatialite-base-image/releases/tag/v1.2.0

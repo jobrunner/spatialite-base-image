@@ -6,6 +6,7 @@ LABEL maintainer="jobrunner"
 LABEL description="Alpine-based runtime image with GDAL, SQLite, SpatiaLite, GEOS, librttopo"
 
 # Install only runtime libraries (no -dev packages)
+# hadolint ignore=DL3018
 RUN apk add --no-cache \
     gdal \
     gdal-tools \
@@ -19,13 +20,25 @@ RUN apk add --no-cache \
     # Create symlink for mod_spatialite (SQLite load_extension expects this name)
     && ln -s /usr/lib/mod_spatialite.so.* /usr/lib/mod_spatialite.so 2>/dev/null || true
 
+# Security hardening: remove SUID/SGID bits from all binaries
+RUN find / -xdev -perm /6000 -type f -exec chmod a-s {} \; 2>/dev/null || true
+
+# Create non-root user for runtime security
+# Using UID 10001 to avoid conflicts with host UIDs
+RUN addgroup -g 10001 -S spatialite && \
+    adduser -u 10001 -S -G spatialite -h /data spatialite
+
 # Configure environment variables
 ENV SPATIALITE_SECURITY=relaxed
 ENV SQLITE_ENABLE_LOAD_EXTENSION=1
 ENV LD_LIBRARY_PATH=/usr/lib:/usr/local/lib
 
-# Set working directory
+# Set working directory and ensure non-root user can write
 WORKDIR /data
+RUN chown spatialite:spatialite /data
+
+# Switch to non-root user
+USER spatialite
 
 # Default command
 CMD ["sqlite3"]

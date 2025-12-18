@@ -10,6 +10,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Install runtime libraries
 # libsqlite3-mod-spatialite provides mod_spatialite.so and pulls in dependencies
+# hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gdal-bin \
     sqlite3 \
@@ -17,13 +18,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+# Security hardening: remove SUID/SGID bits from all binaries
+RUN find / -xdev -perm /6000 -type f -exec chmod a-s {} \; 2>/dev/null || true
+
+# Create non-root user for runtime security
+# Using UID 10001 to avoid conflicts with host UIDs
+RUN groupadd -g 10001 spatialite && \
+    useradd -u 10001 -g spatialite -d /data -s /usr/sbin/nologin spatialite
+
 # Configure environment variables
 ENV SPATIALITE_SECURITY=relaxed
 ENV SQLITE_ENABLE_LOAD_EXTENSION=1
 ENV LD_LIBRARY_PATH=/usr/lib:/usr/local/lib
 
-# Set working directory
+# Set working directory and ensure non-root user can write
 WORKDIR /data
+RUN chown spatialite:spatialite /data
+
+# Switch to non-root user
+USER spatialite
 
 # Default command
 CMD ["sqlite3"]
