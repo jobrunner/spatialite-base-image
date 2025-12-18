@@ -6,6 +6,7 @@ LABEL maintainer="jobrunner"
 LABEL description="Alpine-based dev image with GDAL, SQLite, SpatiaLite, GEOS, librttopo (includes headers)"
 
 # Install runtime libraries + development packages + build tools
+# hadolint ignore=DL3018
 RUN apk add --no-cache \
     gdal \
     gdal-tools \
@@ -29,13 +30,25 @@ RUN apk add --no-cache \
     # Create symlink for mod_spatialite (SQLite load_extension expects this name)
     && ln -s /usr/lib/mod_spatialite.so.* /usr/lib/mod_spatialite.so 2>/dev/null || true
 
+# Security hardening: remove SUID/SGID bits from all binaries
+RUN find / -xdev -perm /6000 -type f -exec chmod a-s {} \; 2>/dev/null || true
+
+# Create non-root user for optional rootless operation
+# Run with: docker run --user spatialite ...
+RUN addgroup -g 10001 -S spatialite && \
+    adduser -u 10001 -S -G spatialite -h /app spatialite
+
 # Configure environment variables
 ENV SPATIALITE_SECURITY=relaxed
 ENV SQLITE_ENABLE_LOAD_EXTENSION=1
 ENV LD_LIBRARY_PATH=/usr/lib:/usr/local/lib
 
-# Set working directory
+# Set working directory with proper permissions for both root and non-root
 WORKDIR /app
+RUN chown spatialite:spatialite /app
+
+# Switch to non-root user (override with: docker run --user root ...)
+USER spatialite
 
 # Default command
 CMD ["/bin/sh"]
