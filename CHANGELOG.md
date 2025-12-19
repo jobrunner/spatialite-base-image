@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Multi-arch support (amd64/arm64) with automatic architecture detection
   - PATH and GOPATH environment variables configured
   - Enables Go development with CGO bindings
+- Claude Code hooks for development workflow protection:
+  - PreToolUse hook prevents direct commits to main/master branches
+  - Enforces VERSION and CHANGELOG.md updates before PR creation
 
 ## [1.4.0] - 2025-12-18
 
