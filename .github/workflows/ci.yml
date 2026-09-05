@@ -6,6 +6,16 @@ on:
   pull_request:
     branches: [main, master]
 
+# Least privilege by default; jobs that need more declare it themselves.
+permissions:
+  contents: read
+
+# Serialize runs per ref so merge builds cannot race each other on the
+# candidate tags, the final image tags, or the git version tag.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
@@ -23,7 +33,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
 
@@ -71,10 +81,48 @@ jobs:
           echo "✓ CHANGELOG.md has entry for version $VERSION"
 
   # =============================================================================
+  # LINT STAGE - Dockerfile linting and misconfiguration scanning
+  # (mirrors the local pre-commit hooks: hadolint + trivy config)
+  # =============================================================================
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Hadolint Dockerfile.alpine
+        uses: hadolint/hadolint-action@2332a7b74a6de0dda2e2221d575162eba76ba5e5 # v3.3.0
+        with:
+          dockerfile: Dockerfile.alpine
+
+      - name: Hadolint Dockerfile.alpine-dev
+        uses: hadolint/hadolint-action@2332a7b74a6de0dda2e2221d575162eba76ba5e5 # v3.3.0
+        with:
+          dockerfile: Dockerfile.alpine-dev
+
+      - name: Hadolint Dockerfile.ubuntu
+        uses: hadolint/hadolint-action@2332a7b74a6de0dda2e2221d575162eba76ba5e5 # v3.3.0
+        with:
+          dockerfile: Dockerfile.ubuntu
+
+      - name: Hadolint Dockerfile.ubuntu-dev
+        uses: hadolint/hadolint-action@2332a7b74a6de0dda2e2221d575162eba76ba5e5 # v3.3.0
+        with:
+          dockerfile: Dockerfile.ubuntu-dev
+
+      - name: Trivy misconfiguration scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: config
+          scan-ref: .
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+
+  # =============================================================================
   # PR: BUILD AND TEST (no push, local images only)
   # =============================================================================
   pr-build-and-test:
-    needs: validate
+    needs: [validate, lint]
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     strategy:
@@ -95,16 +143,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Build image (no push)
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: ${{ matrix.dockerfile }}
@@ -112,8 +157,8 @@ jobs:
           push: false
           load: true
           tags: spatialite:${{ matrix.image_name }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.image_name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image_name }}
           provenance: false
 
       - name: Test runtime image
@@ -132,7 +177,7 @@ jobs:
             /tests/test-dev-image.sh
 
       - name: Scan image for vulnerabilities (fail on fixable HIGH/CRITICAL)
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: spatialite:${{ matrix.image_name }}
           format: table
@@ -142,171 +187,27 @@ jobs:
           exit-code: "1"
 
   # =============================================================================
-  # MERGE: BUILD AND PUSH (multi-arch with SemVer tags)
+  # MERGE: BUILD -> TEST (amd64 + arm64) -> SCAN -> PROMOTE FINAL TAGS
+  # Images are only promoted to their final tags (incl. latest) after all
+  # tests and scans have passed. See build-images.yml.
   # =============================================================================
-  build:
-    needs: validate
+  build-test-promote:
+    needs: [validate, lint]
     if: github.event_name == 'push'
-    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-    strategy:
-      matrix:
-        include:
-          - dockerfile: Dockerfile.ubuntu
-            tag_prefix: ubuntu
-            is_default: false
-            is_default_dev: false
-          - dockerfile: Dockerfile.ubuntu-dev
-            tag_prefix: ubuntu-dev
-            is_default: false
-            is_default_dev: false
-          - dockerfile: Dockerfile.alpine
-            tag_prefix: alpine
-            is_default: true
-            is_default_dev: false
-          - dockerfile: Dockerfile.alpine-dev
-            tag_prefix: alpine-dev
-            is_default: false
-            is_default_dev: true
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push (standard tags)
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ${{ matrix.dockerfile }}
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.tag_prefix }}-${{ needs.validate.outputs.version }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.tag_prefix }}-${{ needs.validate.outputs.major }}.${{ needs.validate.outputs.minor }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.tag_prefix }}-${{ needs.validate.outputs.major }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.tag_prefix }}-latest
-          labels: |
-            org.opencontainers.image.title=spatialite-base-image
-            org.opencontainers.image.description=Multi-arch Docker image with GDAL, SQLite, SpatiaLite, GEOS, librttopo
-            org.opencontainers.image.version=${{ needs.validate.outputs.version }}
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.licenses=GPL-2.0-or-later
-            org.opencontainers.image.revision=${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          provenance: false
-
-      - name: Build and push (default Alpine tags)
-        if: matrix.is_default == true
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ${{ matrix.dockerfile }}
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.validate.outputs.version }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.validate.outputs.major }}.${{ needs.validate.outputs.minor }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.validate.outputs.major }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          labels: |
-            org.opencontainers.image.title=spatialite-base-image
-            org.opencontainers.image.description=Multi-arch Docker image with GDAL, SQLite, SpatiaLite, GEOS, librttopo
-            org.opencontainers.image.version=${{ needs.validate.outputs.version }}
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.licenses=GPL-2.0-or-later
-            org.opencontainers.image.revision=${{ github.sha }}
-          cache-from: type=gha
-          provenance: false
-
-      - name: Build and push (default dev tags)
-        if: matrix.is_default_dev == true
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ${{ matrix.dockerfile }}
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:dev-${{ needs.validate.outputs.version }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:dev-${{ needs.validate.outputs.major }}.${{ needs.validate.outputs.minor }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:dev-${{ needs.validate.outputs.major }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:dev
-          labels: |
-            org.opencontainers.image.title=spatialite-base-image
-            org.opencontainers.image.description=Multi-arch Docker image with GDAL, SQLite, SpatiaLite, GEOS, librttopo (dev)
-            org.opencontainers.image.version=${{ needs.validate.outputs.version }}
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.licenses=GPL-2.0-or-later
-            org.opencontainers.image.revision=${{ github.sha }}
-          cache-from: type=gha
-          provenance: false
-
-  # =============================================================================
-  # MERGE: TEST (on pushed images)
-  # =============================================================================
-  test:
-    needs: [validate, build]
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - image_suffix: ubuntu
-            dev: false
-          - image_suffix: ubuntu-dev
-            dev: true
-          - image_suffix: alpine
-            dev: false
-          - image_suffix: alpine-dev
-            dev: true
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Test runtime image
-        run: |
-          docker run --rm \
-            -v ${{ github.workspace }}/tests:/tests \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.image_suffix }}-${{ needs.validate.outputs.version }} \
-            /tests/test-image.sh
-
-      - name: Test dev image
-        if: matrix.dev
-        run: |
-          docker run --rm \
-            -v ${{ github.workspace }}/tests:/tests \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.image_suffix }}-${{ needs.validate.outputs.version }} \
-            /tests/test-dev-image.sh
+    uses: ./.github/workflows/build-images.yml
+    with:
+      version: ${{ needs.validate.outputs.version }}
+      major: ${{ needs.validate.outputs.major }}
+      minor: ${{ needs.validate.outputs.minor }}
 
   # =============================================================================
   # MERGE: RELEASE (create git tag and GitHub release)
   # =============================================================================
   release:
-    needs: [validate, test]
+    needs: [validate, build-test-promote]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
@@ -314,7 +215,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
 
@@ -340,7 +241,7 @@ jobs:
           } >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           name: v${{ needs.validate.outputs.version }}
           tag_name: v${{ needs.validate.outputs.version }}

@@ -1,0 +1,207 @@
+# Reusable workflow: build all image flavors multi-arch, push them under a
+# CI candidate tag, test them on real amd64 AND arm64 runners, scan them with
+# Trivy, and only then promote the tested manifests to their final tags.
+#
+# Called by ci.yml (merge to main/master) and release.yml (manual release).
+# Promotion uses `docker buildx imagetools create`, so the exact manifests
+# that were tested are retagged - nothing is rebuilt after testing.
+#
+# Note: the mutable `<prefix>-ci` candidate tags are CI-internal. Callers must
+# serialize runs (concurrency group) so candidates cannot be overwritten
+# between build and promote.
+name: Build Images (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Full SemVer version (X.Y.Z)"
+        required: true
+        type: string
+      major:
+        description: "Major version part"
+        required: true
+        type: string
+      minor:
+        description: "Minor version part"
+        required: true
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Build multi-arch images and push them under the CI candidate tag only
+  # ---------------------------------------------------------------------------
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - dockerfile: Dockerfile.alpine
+            tag_prefix: alpine
+          - dockerfile: Dockerfile.alpine-dev
+            tag_prefix: alpine-dev
+          - dockerfile: Dockerfile.ubuntu
+            tag_prefix: ubuntu
+          - dockerfile: Dockerfile.ubuntu-dev
+            tag_prefix: ubuntu-dev
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push candidate
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.tag_prefix }}-ci
+          labels: |
+            org.opencontainers.image.title=spatialite-base-image
+            org.opencontainers.image.description=Multi-arch Docker image with GDAL, SQLite, SpatiaLite, GEOS, librttopo
+            org.opencontainers.image.version=${{ inputs.version }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.licenses=GPL-2.0-or-later
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.tag_prefix }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.tag_prefix }}
+          provenance: false
+
+  # ---------------------------------------------------------------------------
+  # Test and scan the candidate on native runners for BOTH architectures
+  # ---------------------------------------------------------------------------
+  test:
+    needs: build
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+        image: [alpine, alpine-dev, ubuntu, ubuntu-dev]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Test runtime image
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}/tests:/tests \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.image }}-ci \
+            /tests/test-image.sh
+
+      - name: Test dev image
+        if: contains(matrix.image, 'dev')
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}/tests:/tests \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.image }}-ci \
+            /tests/test-dev-image.sh
+
+      - name: Scan candidate for vulnerabilities (fail on fixable HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.image }}-ci
+          format: table
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+  # ---------------------------------------------------------------------------
+  # Promote the tested candidate manifests to their final tags (no rebuild)
+  # ---------------------------------------------------------------------------
+  promote:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - tag_prefix: alpine
+            is_default: true
+            is_default_dev: false
+          - tag_prefix: alpine-dev
+            is_default: false
+            is_default_dev: true
+          - tag_prefix: ubuntu
+            is_default: false
+            is_default_dev: false
+          - tag_prefix: ubuntu-dev
+            is_default: false
+            is_default_dev: false
+
+    steps:
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Promote candidate to final tags
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          PREFIX: ${{ matrix.tag_prefix }}
+          VERSION: ${{ inputs.version }}
+          MAJOR: ${{ inputs.major }}
+          MINOR: ${{ inputs.minor }}
+          IS_DEFAULT: ${{ matrix.is_default }}
+          IS_DEFAULT_DEV: ${{ matrix.is_default_dev }}
+        run: |
+          set -euo pipefail
+
+          TAGS=""
+          add_tags() {
+            for t in "$@"; do
+              TAGS="$TAGS -t ${IMAGE}:$t"
+            done
+          }
+
+          add_tags "${PREFIX}-${VERSION}" "${PREFIX}-${MAJOR}.${MINOR}" "${PREFIX}-${MAJOR}" "${PREFIX}-latest"
+
+          if [ "$IS_DEFAULT" = "true" ]; then
+            add_tags "${VERSION}" "${MAJOR}.${MINOR}" "${MAJOR}" "latest"
+          fi
+
+          if [ "$IS_DEFAULT_DEV" = "true" ]; then
+            add_tags "dev-${VERSION}" "dev-${MAJOR}.${MINOR}" "dev-${MAJOR}" "dev"
+          fi
+
+          # shellcheck disable=SC2086
+          docker buildx imagetools create $TAGS "${IMAGE}:${PREFIX}-ci"
+
+          echo "Promoted ${IMAGE}:${PREFIX}-ci to:${TAGS//-t /}"

@@ -63,7 +63,8 @@ WORKDIR /app
 RUN chown spatialite:spatialite /app
 
 # Switch to non-root user (override with: docker run --user root ...)
-USER spatialite
+# Numeric UID:GID so Kubernetes runAsNonRoot verification works
+USER 10001:10001
 
 # Default command
 CMD ["/bin/sh"]
