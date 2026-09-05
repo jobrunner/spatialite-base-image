@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Workflow fails when fixable HIGH/CRITICAL vulnerabilities are found
 - Trivy vulnerability gate in PR builds: pull requests fail when the built
   image contains fixable HIGH/CRITICAL vulnerabilities
+- Dependabot configuration (`.github/dependabot.yml`): weekly updates for
+  Docker base images and GitHub Actions
 
 ## [1.5.0] - 2025-12-19
 
