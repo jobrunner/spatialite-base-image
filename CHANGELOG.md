@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.1] - 2026-09-05
+
+### Added
+
+- Lint job in CI: hadolint for all Dockerfiles plus Trivy misconfiguration
+  scan (mirrors the local pre-commit hooks)
+
+### Changed
+
+- CI/CD pipeline hardening:
+  - Merge builds now follow build → test → scan → promote: images are pushed
+    under a CI candidate tag (`<flavor>-ci`), tested and scanned, and only
+    then promoted to their final tags (including `latest`) via
+    `docker buildx imagetools create` - broken images can no longer reach
+    `latest`
+  - Images are now tested on native arm64 runners (`ubuntu-24.04-arm`) in
+    addition to amd64; previously arm64 images were never tested
+  - Manual releases (`release.yml`) now run the same build → test → scan →
+    promote pipeline as CI instead of pushing untested images; shared logic
+    lives in the reusable workflow `build-images.yml`
+  - Concurrency groups serialize merge builds and manual releases so they
+    cannot race each other on image tags
+  - All GitHub Actions are pinned to commit SHAs (supply-chain hardening,
+    kept up to date by Dependabot); `build-push-action` upgraded to v6,
+    `action-gh-release` to v2, `checkout` to v5
+  - Workflows declare least-privilege `permissions` at the top level
+  - Buildx cache uses a separate scope per image flavor
+  - PR validation runs for pull requests against any target branch
+    (stacked PRs included)
+- `USER` directive now uses numeric `10001:10001` instead of the username so
+  Kubernetes `runAsNonRoot` verification works (fixes hadolint DL3066)
+
 ## [1.6.0] - 2026-09-05
 
 ### Security
