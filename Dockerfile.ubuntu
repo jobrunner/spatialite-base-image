@@ -1,9 +1,10 @@
-# Ubuntu-based SpatiaLite runtime image with GDAL, GEOS, librttopo
-# Use this image for production deployments
+# Ubuntu-based slim SpatiaLite runtime image (no GDAL)
+# Use this image for production deployments.
+# GDAL lives in the -dev images only. python3 stays - Ubuntu tooling needs it.
 FROM ubuntu:26.04
 
 LABEL maintainer="jobrunner"
-LABEL description="Ubuntu-based runtime image with GDAL, SQLite, SpatiaLite, GEOS, librttopo"
+LABEL description="Ubuntu-based slim runtime image with SQLite, SpatiaLite, GEOS, PROJ, librttopo (no GDAL)"
 
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
@@ -15,7 +16,6 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
     && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
-    gdal-bin \
     sqlite3 \
     libsqlite3-mod-spatialite \
     ca-certificates \

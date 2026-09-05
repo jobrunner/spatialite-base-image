@@ -1,17 +1,16 @@
-# Alpine-based SpatiaLite runtime image with GDAL, GEOS, librttopo
-# Use this image for production deployments
+# Alpine-based slim SpatiaLite runtime image (no GDAL/Python)
+# Use this image for production deployments.
+# GDAL and its heavy Python dependency chain live in the -dev images only.
 FROM alpine:3.24
 
 LABEL maintainer="jobrunner"
-LABEL description="Alpine-based runtime image with GDAL, SQLite, SpatiaLite, GEOS, librttopo"
+LABEL description="Alpine-based slim runtime image with SQLite, SpatiaLite, GEOS, PROJ, librttopo (no GDAL)"
 
-# Install only runtime libraries (no -dev packages)
+# Install only runtime libraries (no -dev packages, no GDAL/Python stack)
 # apk upgrade ensures security patches released after the base image are applied
 # hadolint ignore=DL3018
 RUN apk upgrade --no-cache \
     && apk add --no-cache \
-    gdal \
-    gdal-tools \
     sqlite \
     sqlite-libs \
     libspatialite \

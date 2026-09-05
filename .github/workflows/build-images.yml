@@ -45,12 +45,16 @@ jobs:
         include:
           - dockerfile: Dockerfile.alpine
             tag_prefix: alpine
+            description: Multi-arch slim SpatiaLite runtime image (SQLite, SpatiaLite, GEOS, PROJ, librttopo - no GDAL)
           - dockerfile: Dockerfile.alpine-dev
             tag_prefix: alpine-dev
+            description: Multi-arch SpatiaLite dev image with GDAL, SQLite, SpatiaLite, GEOS, librttopo, Go (headers, gcc, pkg-config)
           - dockerfile: Dockerfile.ubuntu
             tag_prefix: ubuntu
+            description: Multi-arch slim SpatiaLite runtime image (SQLite, SpatiaLite, GEOS, PROJ, librttopo - no GDAL)
           - dockerfile: Dockerfile.ubuntu-dev
             tag_prefix: ubuntu-dev
+            description: Multi-arch SpatiaLite dev image with GDAL, SQLite, SpatiaLite, GEOS, librttopo, Go (headers, gcc, pkg-config)
 
     steps:
       - name: Checkout
@@ -79,7 +83,7 @@ jobs:
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.tag_prefix }}-ci
           labels: |
             org.opencontainers.image.title=spatialite-base-image
-            org.opencontainers.image.description=Multi-arch Docker image with GDAL, SQLite, SpatiaLite, GEOS, librttopo
+            org.opencontainers.image.description=${{ matrix.description }}
             org.opencontainers.image.version=${{ inputs.version }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.licenses=GPL-2.0-or-later

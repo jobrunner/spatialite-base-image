@@ -4,12 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Multi-architecture Docker images (amd64/arm64) providing GDAL, SQLite, SpatiaLite, GEOS, and librttopo on Ubuntu and Alpine base images. Images are published to GitHub Container Registry (ghcr.io).
+Multi-architecture Docker images (amd64/arm64) providing SQLite, SpatiaLite, GEOS, PROJ, and librttopo on Ubuntu and Alpine base images. The dev images additionally ship GDAL and a Go toolchain. Images are published to GitHub Container Registry (ghcr.io).
 
 ## Image Types
 
-- **Runtime images** (`alpine`, `ubuntu`): Minimal, for production
-- **Dev images** (`alpine-dev`, `ubuntu-dev`): Include headers, gcc, pkg-config for CGO builds
+- **Runtime images** (`alpine`, `ubuntu`): Slim, for production - SpatiaLite stack only, **no GDAL/Python**
+- **Dev images** (`alpine-dev`, `ubuntu-dev`): Full toolchain - GDAL, headers, gcc, pkg-config, Go for CGO builds
 
 ## Build Commands
 
@@ -40,13 +40,14 @@ docker run --rm -v $(pwd)/tests:/tests spatialite:alpine-dev sh -c \
 
 ## File Structure
 
-- `Dockerfile.alpine` - Alpine 3.24 runtime image
-- `Dockerfile.alpine-dev` - Alpine 3.24 dev image (with headers, gcc, pkg-config)
-- `Dockerfile.ubuntu` - Ubuntu 26.04 runtime image
-- `Dockerfile.ubuntu-dev` - Ubuntu 26.04 dev image (with headers, gcc, pkg-config)
+- `Dockerfile.alpine` - Alpine 3.24 slim runtime image (no GDAL)
+- `Dockerfile.alpine-dev` - Alpine 3.24 dev image (GDAL, headers, gcc, pkg-config, Go)
+- `Dockerfile.ubuntu` - Ubuntu 26.04 slim runtime image (no GDAL)
+- `Dockerfile.ubuntu-dev` - Ubuntu 26.04 dev image (GDAL, headers, gcc, pkg-config, Go)
 - `.github/workflows/ci.yml` - CI pipeline: PRs run lint (hadolint + trivy config) → build → test → Trivy gate; merges run lint → build → test (amd64 + arm64) → scan → promote → tag/release
 - `.github/workflows/build-images.yml` - Reusable workflow (build → test → scan → promote): pushes multi-arch images under `<flavor>-ci` candidate tags, tests them on native amd64/arm64 runners, scans with Trivy, then promotes the tested manifests to final tags via `docker buildx imagetools create`
 - `.github/workflows/security-scan.yml` - Weekly Trivy scan of published images (SARIF upload to GitHub Code Scanning)
+- `.github/workflows/rebuild.yml` - Monthly rebuild of the current release tags with fresh base image packages (same version, new digest)
 - `.github/workflows/release.yml` - Manual/emergency release (workflow_dispatch); runs the same reusable pipeline as CI
 - `.github/dependabot.yml` - Weekly updates for Docker base images and GitHub Actions (keeps SHA-pinned actions current)
 - `tests/test-image.sh` - Runtime tests (library loading, spatial operations)

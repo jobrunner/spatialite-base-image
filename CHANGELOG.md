@@ -16,6 +16,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `action-gh-release` v2 → v3.0.3, `hadolint-action` v3.3.0 → v3.5.0
 - Images rebuilt with the latest base image package updates
 
+## [2.0.0] - 2026-09-05
+
+### BREAKING CHANGES
+
+- **Runtime images no longer ship GDAL** (implements #6): the `alpine` and
+  `ubuntu` runtime images now contain only the SpatiaLite stack (SQLite,
+  SpatiaLite, GEOS, PROJ, librttopo). On Alpine this also removes the heavy
+  Python dependency chain (`python3`, `py3-gdal`, `py3-numpy`, expat, libpng,
+  giflib, ...), which was the main source of recurring CVE findings in
+  downstream scans. If you need `gdalinfo`/`ogr2ogr` at runtime, use the
+  `-dev` images or install GDAL yourself.
+- The `-dev` images are unchanged and keep the full GDAL toolchain
+  (plus headers, gcc, pkg-config, Go).
+
+### Added
+
+- Monthly rebuild workflow (`.github/workflows/rebuild.yml`): republishes the
+  current release tags on the 1st of each month with fresh base image
+  packages (same X.Y.Z, new digest), so published images pick up security
+  patches between releases. Runs the full build → test → scan → promote
+  pipeline; failing rebuilds are never promoted.
+
+### Changed
+
+- Runtime image tests no longer expect GDAL; GDAL checks moved to the dev
+  image test suite
+- Per-flavor OCI image descriptions (runtime images are no longer described
+  as containing GDAL)
+
 ## [1.6.1] - 2026-09-05
 
 ### Added
