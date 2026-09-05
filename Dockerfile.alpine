@@ -1,13 +1,15 @@
 # Alpine-based SpatiaLite runtime image with GDAL, GEOS, librttopo
 # Use this image for production deployments
-FROM alpine:3.21
+FROM alpine:3.24
 
 LABEL maintainer="jobrunner"
 LABEL description="Alpine-based runtime image with GDAL, SQLite, SpatiaLite, GEOS, librttopo"
 
 # Install only runtime libraries (no -dev packages)
+# apk upgrade ensures security patches released after the base image are applied
 # hadolint ignore=DL3018
-RUN apk add --no-cache \
+RUN apk upgrade --no-cache \
+    && apk add --no-cache \
     gdal \
     gdal-tools \
     sqlite \

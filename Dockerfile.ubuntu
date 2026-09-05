@@ -10,13 +10,19 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Install runtime libraries
 # libsqlite3-mod-spatialite provides mod_spatialite.so and pulls in dependencies
+# upgrade ensures security patches released after the base image are applied
 # hadolint ignore=DL3008
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends \
     gdal-bin \
     sqlite3 \
     libsqlite3-mod-spatialite \
     ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    # Remove pebble (Go binary baked into the ubuntu base image, not needed,
+    # not dpkg-managed, and a recurring source of Go stdlib CVE findings)
+    && rm -f /usr/bin/pebble
 
 # Security hardening: remove SUID/SGID bits from all binaries
 RUN find / -xdev -perm /6000 -type f -exec chmod a-s {} \; 2>/dev/null || true

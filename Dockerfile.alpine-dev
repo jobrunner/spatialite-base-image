@@ -1,13 +1,15 @@
 # Alpine-based SpatiaLite development image with GDAL, GEOS, librttopo
 # Use this image for building applications with CGO bindings
-FROM alpine:3.21
+FROM alpine:3.24
 
 LABEL maintainer="jobrunner"
 LABEL description="Alpine-based dev image with GDAL, SQLite, SpatiaLite, GEOS, librttopo (includes headers)"
 
 # Install runtime libraries + development packages + build tools
+# apk upgrade ensures security patches released after the base image are applied
 # hadolint ignore=DL3018
-RUN apk add --no-cache \
+RUN apk upgrade --no-cache \
+    && apk add --no-cache \
     gdal \
     gdal-tools \
     sqlite \
@@ -30,14 +32,14 @@ RUN apk add --no-cache \
     # Create symlink for mod_spatialite (SQLite load_extension expects this name)
     && ln -s /usr/lib/mod_spatialite.so.* /usr/lib/mod_spatialite.so 2>/dev/null || true
 
-# Install Go 1.24.4
+# Install Go 1.26.8
 ARG TARGETARCH
 RUN case "${TARGETARCH}" in \
         amd64) GOARCH="amd64" ;; \
         arm64) GOARCH="arm64" ;; \
         *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
     esac && \
-    wget -q "https://go.dev/dl/go1.24.4.linux-${GOARCH}.tar.gz" -O /tmp/go.tar.gz && \
+    wget -q "https://go.dev/dl/go1.26.8.linux-${GOARCH}.tar.gz" -O /tmp/go.tar.gz && \
     tar -C /usr/local -xzf /tmp/go.tar.gz && \
     rm /tmp/go.tar.gz
 
