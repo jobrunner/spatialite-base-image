@@ -23,12 +23,12 @@ Images use semantic versioning. When you tag a release `v1.2.3`, the following t
 
 ### Runtime Images (for Production)
 
-Slim images containing only the SpatiaLite runtime stack - **no GDAL, no Python**. Use these for your final production containers. If you need GDAL tools (`gdalinfo`, `ogr2ogr`) at runtime, use a dev image or install GDAL yourself.
+Slim images containing only the SpatiaLite runtime stack - **no GDAL, no Python, no libcurl**. PROJ is built without network support (no `PROJ_NETWORK` CDN grid downloads). Use these for your final production containers. If you need GDAL tools (`gdalinfo`, `ogr2ogr`) or PROJ grid downloads at runtime, use a dev image or install the distro packages yourself.
 
 ```
-ghcr.io/jobrunner/spatialite-base-image:alpine-2.0.0
-ghcr.io/jobrunner/spatialite-base-image:ubuntu-2.0.0
-ghcr.io/jobrunner/spatialite-base-image:2.0.0          # Alpine (default)
+ghcr.io/jobrunner/spatialite-base-image:alpine-3.0.0
+ghcr.io/jobrunner/spatialite-base-image:ubuntu-3.0.0
+ghcr.io/jobrunner/spatialite-base-image:3.0.0          # Alpine (default)
 ```
 
 | Base | Tags |
@@ -41,9 +41,9 @@ ghcr.io/jobrunner/spatialite-base-image:2.0.0          # Alpine (default)
 Images with development headers, pkg-config files, and build tools (gcc, g++). Use these to compile applications with CGO bindings.
 
 ```
-ghcr.io/jobrunner/spatialite-base-image:alpine-dev-2.0.0
-ghcr.io/jobrunner/spatialite-base-image:ubuntu-dev-2.0.0
-ghcr.io/jobrunner/spatialite-base-image:dev-2.0.0       # Alpine (default)
+ghcr.io/jobrunner/spatialite-base-image:alpine-dev-3.0.0
+ghcr.io/jobrunner/spatialite-base-image:ubuntu-dev-3.0.0
+ghcr.io/jobrunner/spatialite-base-image:dev-3.0.0       # Alpine (default)
 ```
 
 | Base | Tags |
@@ -75,11 +75,11 @@ Use matching dev/runtime image pairs from this repository with the **same versio
 
 ```dockerfile
 # BUILD with dev image
-FROM ghcr.io/jobrunner/spatialite-base-image:alpine-dev-2.0.0 AS builder
+FROM ghcr.io/jobrunner/spatialite-base-image:alpine-dev-3.0.0 AS builder
 # ... install Go, build ...
 
 # RUN with matching runtime image (same version!)
-FROM ghcr.io/jobrunner/spatialite-base-image:alpine-2.0.0
+FROM ghcr.io/jobrunner/spatialite-base-image:alpine-3.0.0
 COPY --from=builder /app/myapp .
 ```
 
@@ -93,7 +93,7 @@ Runtime images (slim):
 - **SpatiaLite** - Spatial extension for SQLite
 - **GEOS** - Geometry Engine Open Source
 - **librttopo** - RT Topology Library
-- **PROJ** - Coordinate transformation library
+- **PROJ** - Coordinate transformation library (built without network support; no CDN grid downloads)
 
 Dev images additionally:
 
@@ -128,7 +128,7 @@ All images include security hardening:
 Dev images can be run as root for tasks requiring elevated privileges:
 
 ```bash
-docker run --user root -it ghcr.io/jobrunner/spatialite-base-image:alpine-dev-2.0.0 sh
+docker run --user root -it ghcr.io/jobrunner/spatialite-base-image:alpine-dev-3.0.0 sh
 ```
 
 ### Production hardening
@@ -162,7 +162,7 @@ sqlite> SELECT spatialite_version();
 ```bash
 docker run --rm -it \
   -v $(pwd)/data:/data \
-  ghcr.io/jobrunner/spatialite-base-image:2.0.0 \
+  ghcr.io/jobrunner/spatialite-base-image:3.0.0 \
   sqlite3 /data/mydb.sqlite
 ```
 
@@ -174,7 +174,7 @@ docker run --rm -it \
 # =============================================================================
 # Build stage - use the dev image with all headers and build tools
 # =============================================================================
-FROM ghcr.io/jobrunner/spatialite-base-image:alpine-dev-2.0.0 AS builder
+FROM ghcr.io/jobrunner/spatialite-base-image:alpine-dev-3.0.0 AS builder
 
 # Install Go
 RUN apk add --no-cache go
@@ -195,7 +195,7 @@ RUN CGO_ENABLED=1 go build -o /app/myapp .
 # =============================================================================
 # Runtime stage - use the minimal runtime image (SAME VERSION!)
 # =============================================================================
-FROM ghcr.io/jobrunner/spatialite-base-image:alpine-2.0.0
+FROM ghcr.io/jobrunner/spatialite-base-image:alpine-3.0.0
 
 # Copy only the binary from builder
 COPY --from=builder /app/myapp /usr/local/bin/myapp
@@ -209,7 +209,7 @@ Some Go libraries require glibc. Use the Ubuntu variants:
 
 ```dockerfile
 # Build stage
-FROM ghcr.io/jobrunner/spatialite-base-image:ubuntu-dev-2.0.0 AS builder
+FROM ghcr.io/jobrunner/spatialite-base-image:ubuntu-dev-3.0.0 AS builder
 
 # Install Go
 RUN apt-get update && apt-get install -y --no-install-recommends golang-go \
@@ -222,7 +222,7 @@ COPY . .
 RUN CGO_ENABLED=1 go build -o /app/myapp .
 
 # Runtime stage (SAME VERSION!)
-FROM ghcr.io/jobrunner/spatialite-base-image:ubuntu-2.0.0
+FROM ghcr.io/jobrunner/spatialite-base-image:ubuntu-3.0.0
 
 COPY --from=builder /app/myapp /usr/local/bin/myapp
 ENTRYPOINT ["/usr/local/bin/myapp"]
@@ -233,7 +233,7 @@ ENTRYPOINT ["/usr/local/bin/myapp"]
 If you need explicit CGO flags (e.g., for [lukeroth/gdal](https://github.com/lukeroth/gdal)):
 
 ```dockerfile
-FROM ghcr.io/jobrunner/spatialite-base-image:alpine-dev-2.0.0 AS builder
+FROM ghcr.io/jobrunner/spatialite-base-image:alpine-dev-3.0.0 AS builder
 
 RUN apk add --no-cache go
 
@@ -248,7 +248,7 @@ RUN CGO_ENABLED=1 \
     CGO_LDFLAGS="$(pkg-config --libs gdal)" \
     go build -o /app/myapp .
 
-FROM ghcr.io/jobrunner/spatialite-base-image:alpine-2.0.0
+FROM ghcr.io/jobrunner/spatialite-base-image:alpine-3.0.0
 COPY --from=builder /app/myapp /usr/local/bin/myapp
 ENTRYPOINT ["/usr/local/bin/myapp"]
 ```

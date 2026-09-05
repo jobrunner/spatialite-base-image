@@ -1,25 +1,107 @@
-# Alpine-based slim SpatiaLite runtime image (no GDAL/Python)
+# Alpine-based slim SpatiaLite runtime image (no GDAL/Python, no libcurl)
 # Use this image for production deployments.
+#
+# PROJ is built from source with network support disabled (ENABLE_CURL=OFF)
+# and libspatialite is built against it. This keeps libcurl, c-ares and
+# nghttp2 - recurring CVE sources - out of the runtime image entirely.
+# Trade-off: PROJ CDN grid downloads (PROJ_NETWORK) are not available.
 # GDAL and its heavy Python dependency chain live in the -dev images only.
+
+# =============================================================================
+# Builder stage: compile PROJ (curl-free) and libspatialite
+# =============================================================================
+FROM alpine:3.24 AS builder
+
+SHELL ["/bin/ash", "-eo", "pipefail", "-c"]
+
+ARG PROJ_VERSION=9.8.1
+ARG PROJ_SHA256=af5b731c145c1d13c4e3b4eeb7d167e94e845e440f71e3496b4ed8dae0291960
+ARG SPATIALITE_VERSION=5.1.0
+ARG SPATIALITE_SHA256=43be2dd349daffe016dd1400c5d11285828c22fea35ca5109f21f3ed50605080
+
+# hadolint ignore=DL3018
+RUN apk add --no-cache \
+    build-base \
+    cmake \
+    ninja \
+    wget \
+    pkgconfig \
+    automake \
+    sqlite-dev \
+    tiff-dev \
+    geos-dev \
+    librttopo-dev \
+    libxml2-dev \
+    minizip-dev \
+    zlib-dev
+
+WORKDIR /build
+
+# Build PROJ without curl (no network/CDN grid support)
+RUN wget -q "https://download.osgeo.org/proj/proj-${PROJ_VERSION}.tar.gz" && \
+    echo "${PROJ_SHA256}  proj-${PROJ_VERSION}.tar.gz" | sha256sum -c - && \
+    tar xzf "proj-${PROJ_VERSION}.tar.gz" && \
+    cmake -S "proj-${PROJ_VERSION}" -B proj-build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr/local \
+      -DENABLE_CURL=OFF \
+      -DENABLE_TIFF=ON \
+      -DBUILD_APPS=OFF \
+      -DBUILD_TESTING=OFF && \
+    cmake --build proj-build && \
+    cmake --install proj-build --strip
+
+# Build libspatialite against the curl-free PROJ
+RUN wget -q "https://www.gaia-gis.it/gaia-sins/libspatialite-sources/libspatialite-${SPATIALITE_VERSION}.tar.gz" && \
+    echo "${SPATIALITE_SHA256}  libspatialite-${SPATIALITE_VERSION}.tar.gz" | sha256sum -c - && \
+    mkdir spatialite-src && \
+    tar xzf "libspatialite-${SPATIALITE_VERSION}.tar.gz" --strip-components=1 -C spatialite-src
+
+WORKDIR /build/spatialite-src
+
+# The tarball ships config.guess/config.sub too old for musl and aarch64 -
+# replace them with the current ones from the automake package
+RUN cp /usr/share/automake-*/config.guess /usr/share/automake-*/config.sub . && \
+    PKG_CONFIG_PATH=/usr/local/lib/pkgconfig ./configure \
+      --prefix=/usr/local \
+      --disable-freexl \
+      --disable-examples \
+      --disable-static && \
+    make -j"$(nproc)" && \
+    make install-strip
+
+# Collect only the runtime artifacts, preserving symlinks (a glob COPY would
+# dereference them into duplicate full copies)
+RUN mkdir -p /out/lib && \
+    cp -P /usr/local/lib/*.so.* /usr/local/lib/mod_spatialite.so /out/lib/
+
+# =============================================================================
+# Runtime stage
+# =============================================================================
 FROM alpine:3.24
 
 LABEL maintainer="jobrunner"
-LABEL description="Alpine-based slim runtime image with SQLite, SpatiaLite, GEOS, PROJ, librttopo (no GDAL)"
+LABEL description="Alpine-based slim runtime image with SQLite, SpatiaLite, GEOS, PROJ (no network), librttopo - no GDAL, no libcurl"
 
-# Install only runtime libraries (no -dev packages, no GDAL/Python stack)
+# Install distro runtime libraries (none of these pull in libcurl)
 # apk upgrade ensures security patches released after the base image are applied
 # hadolint ignore=DL3018
 RUN apk upgrade --no-cache \
     && apk add --no-cache \
     sqlite \
     sqlite-libs \
-    libspatialite \
     geos \
     librttopo \
-    proj \
-    ca-certificates \
-    # Create symlink for mod_spatialite (SQLite load_extension expects this name)
-    && ln -s /usr/lib/mod_spatialite.so.* /usr/lib/mod_spatialite.so 2>/dev/null || true
+    libxml2 \
+    minizip \
+    tiff \
+    ca-certificates
+
+# Self-built PROJ (curl-free) + libspatialite + mod_spatialite.
+# LD_LIBRARY_PATH below includes /usr/local/lib, and PROJ finds its data
+# relative to its install prefix (/usr/local/share/proj).
+COPY --from=builder /out/lib/ /usr/local/lib/
+COPY --from=builder /usr/local/share/proj /usr/local/share/proj
 
 # Security hardening: remove SUID/SGID bits from all binaries
 RUN find / -xdev -perm /6000 -type f -exec chmod a-s {} \; 2>/dev/null || true
