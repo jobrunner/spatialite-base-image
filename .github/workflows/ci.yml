@@ -3,8 +3,8 @@ name: CI
 on:
   push:
     branches: [main, master]
+  # No branch filter: stacked PRs (base = feature branch) are validated too
   pull_request:
-    branches: [main, master]
 
 # Least privilege by default; jobs that need more declare it themselves.
 permissions:
