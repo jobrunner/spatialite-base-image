@@ -21,6 +21,24 @@ echo "SpatiaLite Dev Image Test Suite"
 echo "=========================================="
 echo ""
 
+echo "--- GDAL Tools (dev images only) ---"
+
+# GDAL and its tooling are only shipped in the -dev images
+gdalinfo --version > /dev/null 2>&1
+test_result $? "gdalinfo (GDAL) is available"
+echo "  Version: $(gdalinfo --version 2>/dev/null)"
+
+ogrinfo --version > /dev/null 2>&1
+test_result $? "ogrinfo (OGR/GDAL) is available"
+
+GDAL_TEST=$(ogrinfo --formats 2>&1)
+if echo "$GDAL_TEST" | grep -qi "SQLite"; then
+    test_result 0 "GDAL has SQLite/SpatiaLite driver"
+else
+    test_result 1 "GDAL SQLite driver not found"
+fi
+
+echo ""
 echo "--- Build Tools ---"
 
 # Test 1: Check gcc is available

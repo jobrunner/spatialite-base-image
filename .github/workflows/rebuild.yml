@@ -1,0 +1,61 @@
+name: Monthly Rebuild
+
+# Rebuilds and republishes the CURRENT release tags with fresh base image
+# packages (the Dockerfiles run apk/apt upgrade at build time), so published
+# images pick up security patches between releases instead of rotting.
+#
+# The existing version tags are refreshed in place (same X.Y.Z, new digest) -
+# the same policy the official Docker library images follow. The full
+# build -> test -> scan -> promote pipeline runs, so a rebuild that fails
+# tests or ships fixable HIGH/CRITICAL vulnerabilities is never promoted.
+
+on:
+  schedule:
+    # 1st of each month, 05:00 UTC (one hour before the Monday security scan
+    # slot so a scan following a rebuild sees the fresh images)
+    - cron: "0 5 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Same group as ci.yml/release.yml so a rebuild cannot race a merge build
+# or a manual release on the candidate and final image tags.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      major: ${{ steps.version.outputs.major }}
+      minor: ${{ steps.version.outputs.minor }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Read current VERSION
+        id: version
+        run: |
+          VERSION=$(tr -d '[:space:]' < VERSION)
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          MINOR=$(echo "$VERSION" | cut -d. -f2)
+          {
+            echo "version=$VERSION"
+            echo "major=$MAJOR"
+            echo "minor=$MINOR"
+          } >> "$GITHUB_OUTPUT"
+          echo "Rebuilding release $VERSION"
+
+  rebuild:
+    needs: version
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/build-images.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+      major: ${{ needs.version.outputs.major }}
+      minor: ${{ needs.version.outputs.minor }}

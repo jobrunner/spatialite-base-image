@@ -49,13 +49,8 @@ sqlite3 --version > /dev/null 2>&1
 test_result $? "sqlite3 binary is available"
 echo "  Version: $(sqlite3 --version)"
 
-# Test 3: Check GDAL tools
-gdalinfo --version > /dev/null 2>&1
-test_result $? "gdalinfo (GDAL) is available"
-echo "  Version: $(gdalinfo --version)"
-
-ogrinfo --version > /dev/null 2>&1
-test_result $? "ogrinfo (OGR/GDAL) is available"
+# Note: GDAL is not part of the runtime images (slim variant).
+# GDAL checks live in test-dev-image.sh.
 
 echo ""
 echo "--- Library Loading ---"
@@ -121,14 +116,6 @@ if echo "$TRANSFORM_TEST" | grep -qE "^[0-9.-]+$"; then
     test_result 0 "Coordinate transformation (PROJ) works"
 else
     test_result 1 "Coordinate transformation test failed: $TRANSFORM_TEST"
-fi
-
-# Test 11: Test GDAL can read spatial data
-GDAL_TEST=$(ogrinfo --formats 2>&1)
-if echo "$GDAL_TEST" | grep -qi "SQLite"; then
-    test_result 0 "GDAL has SQLite/SpatiaLite driver"
-else
-    test_result 1 "GDAL SQLite driver not found"
 fi
 
 # Test 12: Test spatial relationship functions
