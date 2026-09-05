@@ -5,16 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.6.2] - 2026-09-05
+## [3.0.0] - 2026-09-05
+
+### BREAKING CHANGES
+
+- **Runtime images: PROJ is now built without network support** (implements
+  #13): PROJ CDN grid downloads (`PROJ_NETWORK`) are no longer available in
+  the `alpine` and `ubuntu` runtime images. In return, `libcurl`, `c-ares`
+  and `nghttp2` - recurring CVE sources - are gone from the runtime images
+  entirely. The `-dev` images keep the distro PROJ with network support.
 
 ### Changed
 
-- Updated all GitHub Actions to their latest releases (Dependabot):
-  `checkout` v5 → v7.0.1, `build-push-action` v6 → v7.3.0,
-  `login-action` v3 → v4.6.0, `setup-qemu-action`/`setup-buildx-action`
-  v3 → v4.3.0, `codeql-action/upload-sarif` v3 → v4.37.9,
-  `action-gh-release` v2 → v3.0.3, `hadolint-action` v3.3.0 → v3.5.0
-- Images rebuilt with the latest base image package updates
+- PROJ 9.8.1 and libspatialite 5.1.0 are compiled from checksum-verified
+  sources in a multi-stage builder (`ENABLE_CURL=OFF`); GEOS, librttopo,
+  SQLite, libxml2, minizip and libtiff remain distro packages
+- Image sizes: alpine 88 → 85 MB, ubuntu 310 → 277 MB
+- Note: the self-built `libproj`/`libspatialite` are invisible to package
+  scanners (no apk/dpkg entry). Their versions are pinned as build ARGs
+  (`PROJ_VERSION`, `SPATIALITE_VERSION`) in the runtime Dockerfiles and must
+  be bumped manually when new upstream releases ship
 
 ## [2.0.0] - 2026-09-05
 
@@ -44,6 +54,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   image test suite
 - Per-flavor OCI image descriptions (runtime images are no longer described
   as containing GDAL)
+
+## [1.6.2] - 2026-09-05
+
+### Changed
+
+- Updated all GitHub Actions to their latest releases (Dependabot):
+  `checkout` v5 → v7.0.1, `build-push-action` v6 → v7.3.0,
+  `login-action` v3 → v4.6.0, `setup-qemu-action`/`setup-buildx-action`
+  v3 → v4.3.0, `codeql-action/upload-sarif` v3 → v4.37.9,
+  `action-gh-release` v2 → v3.0.3, `hadolint-action` v3.3.0 → v3.5.0
+- Images rebuilt with the latest base image package updates
 
 ## [1.6.1] - 2026-09-05
 

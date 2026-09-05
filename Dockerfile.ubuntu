@@ -1,28 +1,120 @@
-# Ubuntu-based slim SpatiaLite runtime image (no GDAL)
+# Ubuntu-based slim SpatiaLite runtime image (no GDAL, no libcurl)
 # Use this image for production deployments.
+#
+# PROJ is built from source with network support disabled (ENABLE_CURL=OFF)
+# and libspatialite is built against it. This keeps libcurl and nghttp2 -
+# recurring CVE sources - out of the runtime image entirely.
+# Trade-off: PROJ CDN grid downloads (PROJ_NETWORK) are not available.
 # GDAL lives in the -dev images only. python3 stays - Ubuntu tooling needs it.
+
+# =============================================================================
+# Builder stage: compile PROJ (curl-free) and libspatialite
+# =============================================================================
+FROM ubuntu:26.04 AS builder
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+ARG PROJ_VERSION=9.8.1
+ARG PROJ_SHA256=af5b731c145c1d13c4e3b4eeb7d167e94e845e440f71e3496b4ed8dae0291960
+ARG SPATIALITE_VERSION=5.1.0
+ARG SPATIALITE_SHA256=43be2dd349daffe016dd1400c5d11285828c22fea35ca5109f21f3ed50605080
+
+# hadolint ignore=DL3008
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    ninja-build \
+    wget \
+    pkg-config \
+    automake \
+    ca-certificates \
+    sqlite3 \
+    libsqlite3-dev \
+    libtiff-dev \
+    libgeos-dev \
+    librttopo-dev \
+    libxml2-dev \
+    libminizip-dev \
+    zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# Build PROJ without curl (no network/CDN grid support)
+RUN wget -q "https://download.osgeo.org/proj/proj-${PROJ_VERSION}.tar.gz" && \
+    echo "${PROJ_SHA256}  proj-${PROJ_VERSION}.tar.gz" | sha256sum -c - && \
+    tar xzf "proj-${PROJ_VERSION}.tar.gz" && \
+    cmake -S "proj-${PROJ_VERSION}" -B proj-build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr/local \
+      -DENABLE_CURL=OFF \
+      -DENABLE_TIFF=ON \
+      -DBUILD_APPS=OFF \
+      -DBUILD_TESTING=OFF && \
+    cmake --build proj-build && \
+    cmake --install proj-build --strip
+
+# Build libspatialite against the curl-free PROJ
+RUN wget -q "https://www.gaia-gis.it/gaia-sins/libspatialite-sources/libspatialite-${SPATIALITE_VERSION}.tar.gz" && \
+    echo "${SPATIALITE_SHA256}  libspatialite-${SPATIALITE_VERSION}.tar.gz" | sha256sum -c - && \
+    mkdir spatialite-src && \
+    tar xzf "libspatialite-${SPATIALITE_VERSION}.tar.gz" --strip-components=1 -C spatialite-src
+
+WORKDIR /build/spatialite-src
+
+# The tarball ships config.guess/config.sub too old for aarch64 -
+# replace them with the current ones from the automake package
+RUN cp /usr/share/automake-*/config.guess /usr/share/automake-*/config.sub . && \
+    PKG_CONFIG_PATH=/usr/local/lib/pkgconfig ./configure \
+      --prefix=/usr/local \
+      --disable-freexl \
+      --disable-examples \
+      --disable-static && \
+    make -j"$(nproc)" && \
+    make install-strip
+
+# Collect only the runtime artifacts, preserving symlinks (a glob COPY would
+# dereference them into duplicate full copies)
+RUN mkdir -p /out/lib && \
+    cp -P /usr/local/lib/*.so.* /usr/local/lib/mod_spatialite.so /out/lib/
+
+# =============================================================================
+# Runtime stage
+# =============================================================================
 FROM ubuntu:26.04
 
 LABEL maintainer="jobrunner"
-LABEL description="Ubuntu-based slim runtime image with SQLite, SpatiaLite, GEOS, PROJ, librttopo (no GDAL)"
+LABEL description="Ubuntu-based slim runtime image with SQLite, SpatiaLite, GEOS, PROJ (no network), librttopo - no GDAL, no libcurl"
 
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install runtime libraries
-# libsqlite3-mod-spatialite provides mod_spatialite.so and pulls in dependencies
+# Install distro runtime libraries (none of these pull in libcurl)
 # upgrade ensures security patches released after the base image are applied
 # hadolint ignore=DL3008
 RUN apt-get update \
     && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
     sqlite3 \
-    libsqlite3-mod-spatialite \
+    libsqlite3-0 \
+    libgeos-c1t64 \
+    librttopo1 \
+    libxml2-16 \
+    libminizip1 \
+    libtiff6 \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     # Remove pebble (Go binary baked into the ubuntu base image, not needed,
     # not dpkg-managed, and a recurring source of Go stdlib CVE findings)
     && rm -f /usr/bin/pebble
+
+# Self-built PROJ (curl-free) + libspatialite + mod_spatialite.
+# LD_LIBRARY_PATH below includes /usr/local/lib, and PROJ finds its data
+# relative to its install prefix (/usr/local/share/proj).
+COPY --from=builder /out/lib/ /usr/local/lib/
+COPY --from=builder /usr/local/share/proj /usr/local/share/proj
 
 # Security hardening: remove SUID/SGID bits from all binaries
 RUN find / -xdev -perm /6000 -type f -exec chmod a-s {} \; 2>/dev/null || true

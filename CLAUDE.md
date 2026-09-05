@@ -8,8 +8,8 @@ Multi-architecture Docker images (amd64/arm64) providing SQLite, SpatiaLite, GEO
 
 ## Image Types
 
-- **Runtime images** (`alpine`, `ubuntu`): Slim, for production - SpatiaLite stack only, **no GDAL/Python**
-- **Dev images** (`alpine-dev`, `ubuntu-dev`): Full toolchain - GDAL, headers, gcc, pkg-config, Go for CGO builds
+- **Runtime images** (`alpine`, `ubuntu`): Slim, for production - SpatiaLite stack only, **no GDAL/Python, no libcurl**. PROJ and libspatialite are compiled from checksum-verified sources in a multi-stage builder (PROJ with `ENABLE_CURL=OFF`, so no `PROJ_NETWORK` grid downloads). Their versions are pinned as build ARGs (`PROJ_VERSION`, `SPATIALITE_VERSION`) in the runtime Dockerfiles and must be bumped manually - package scanners do not see these self-built libraries.
+- **Dev images** (`alpine-dev`, `ubuntu-dev`): Full toolchain - GDAL, distro PROJ (with network support), headers, gcc, pkg-config, Go for CGO builds
 
 ## Build Commands
 
