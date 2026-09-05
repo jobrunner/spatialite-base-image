@@ -10,8 +10,11 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Install runtime libraries + development packages + build tools
 # The -dev packages pull in matching runtime libraries automatically
+# upgrade ensures security patches released after the base image are applied
 # hadolint ignore=DL3008
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends \
     gdal-bin \
     sqlite3 \
     libsqlite3-mod-spatialite \
@@ -26,16 +29,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     g++ \
     pkg-config \
     wget \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    # Remove pebble (Go binary baked into the ubuntu base image, not needed,
+    # not dpkg-managed, and a recurring source of Go stdlib CVE findings)
+    && rm -f /usr/bin/pebble
 
-# Install Go 1.24.4
+# Install Go 1.26.8
 ARG TARGETARCH
 RUN case "${TARGETARCH}" in \
         amd64) GOARCH="amd64" ;; \
         arm64) GOARCH="arm64" ;; \
         *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
     esac && \
-    wget -q "https://go.dev/dl/go1.24.4.linux-${GOARCH}.tar.gz" -O /tmp/go.tar.gz && \
+    wget -q "https://go.dev/dl/go1.26.8.linux-${GOARCH}.tar.gz" -O /tmp/go.tar.gz && \
     tar -C /usr/local -xzf /tmp/go.tar.gz && \
     rm /tmp/go.tar.gz
 

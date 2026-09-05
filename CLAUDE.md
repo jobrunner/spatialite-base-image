@@ -40,11 +40,12 @@ docker run --rm -v $(pwd)/tests:/tests spatialite:alpine-dev sh -c \
 
 ## File Structure
 
-- `Dockerfile.alpine` - Alpine 3.21 runtime image
-- `Dockerfile.alpine-dev` - Alpine 3.21 dev image (with headers, gcc, pkg-config)
+- `Dockerfile.alpine` - Alpine 3.24 runtime image
+- `Dockerfile.alpine-dev` - Alpine 3.24 dev image (with headers, gcc, pkg-config)
 - `Dockerfile.ubuntu` - Ubuntu 26.04 runtime image
 - `Dockerfile.ubuntu-dev` - Ubuntu 26.04 dev image (with headers, gcc, pkg-config)
-- `.github/workflows/ci.yml` - CI pipeline (build → test → tag on main)
+- `.github/workflows/ci.yml` - CI pipeline (build → test → tag on main), includes Trivy vulnerability gate on PRs
+- `.github/workflows/security-scan.yml` - Weekly Trivy scan of published images (SARIF upload to GitHub Code Scanning)
 - `.github/workflows/release.yml` - Release pipeline (triggered by version tags)
 - `tests/test-image.sh` - Runtime tests (library loading, spatial operations)
 - `tests/test-dev-image.sh` - Dev tests (headers, pkg-config, compilation)

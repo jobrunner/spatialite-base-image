@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-09-05
+
+### Security
+
+- Fixed all known fixable HIGH/CRITICAL CVEs in all images:
+  - Alpine base image upgraded from 3.21 to 3.24 (fixes CVE-2026-31789 in
+    OpenSSL, CVE-2025-54874 in openjpeg, plus HIGH severity CVEs in zlib,
+    musl, libpng, libexpat, libxml2, nghttp2 and Python)
+  - `apk upgrade` (Alpine) and `apt-get upgrade` (Ubuntu) now run during
+    image builds so security patches released after the base image are
+    always applied (fixes CVE-2026-45447 in OpenSSL on Ubuntu)
+  - Go upgraded from 1.24.4 (EOL) to 1.26.8 in dev images (fixes
+    CVE-2025-68121 and ~20 HIGH severity stdlib CVEs)
+
+### Added
+
+- Weekly security scanning (`.github/workflows/security-scan.yml`):
+  - Trivy scans all published images every Monday 06:00 UTC (and on demand)
+  - Results are uploaded as SARIF to GitHub Code Scanning
+  - Workflow fails when fixable HIGH/CRITICAL vulnerabilities are found
+- Trivy vulnerability gate in PR builds: pull requests fail when the built
+  image contains fixable HIGH/CRITICAL vulnerabilities
+
 ## [1.5.0] - 2025-12-19
 
 ### Added

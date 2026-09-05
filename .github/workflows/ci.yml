@@ -131,6 +131,16 @@ jobs:
             spatialite:${{ matrix.image_name }} \
             /tests/test-dev-image.sh
 
+      - name: Scan image for vulnerabilities (fail on fixable HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: spatialite:${{ matrix.image_name }}
+          format: table
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
   # =============================================================================
   # MERGE: BUILD AND PUSH (multi-arch with SemVer tags)
   # =============================================================================
