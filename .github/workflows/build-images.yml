@@ -1,6 +1,8 @@
-# Reusable workflow: build all image flavors multi-arch, push them under a
-# CI candidate tag, test them on real amd64 AND arm64 runners, scan them with
-# Trivy, and only then promote the tested manifests to their final tags.
+# Reusable workflow: build each image flavor natively per architecture
+# (amd64 and arm64 runners, no QEMU), merge the per-arch images into one
+# multi-arch candidate manifest, test them on real amd64 AND arm64 runners,
+# scan them with Trivy, and only then promote the tested manifests to their
+# final tags.
 #
 # Called by ci.yml (merge to main/master) and release.yml (manual release).
 # Promotion uses `docker buildx imagetools create`, so the exact manifests
@@ -33,35 +35,22 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Build multi-arch images and push them under the CI candidate tag only
+  # Build each architecture natively (no QEMU) and push per-arch candidates
   # ---------------------------------------------------------------------------
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     permissions:
       contents: read
       packages: write
     strategy:
+      fail-fast: false
       matrix:
-        include:
-          - dockerfile: Dockerfile.alpine
-            tag_prefix: alpine
-            description: Multi-arch slim SpatiaLite runtime image (SQLite, SpatiaLite, GEOS, PROJ, librttopo - no GDAL)
-          - dockerfile: Dockerfile.alpine-dev
-            tag_prefix: alpine-dev
-            description: Multi-arch SpatiaLite dev image with GDAL, SQLite, SpatiaLite, GEOS, librttopo, Go (headers, gcc, pkg-config)
-          - dockerfile: Dockerfile.ubuntu
-            tag_prefix: ubuntu
-            description: Multi-arch slim SpatiaLite runtime image (SQLite, SpatiaLite, GEOS, PROJ, librttopo - no GDAL)
-          - dockerfile: Dockerfile.ubuntu-dev
-            tag_prefix: ubuntu-dev
-            description: Multi-arch SpatiaLite dev image with GDAL, SQLite, SpatiaLite, GEOS, librttopo, Go (headers, gcc, pkg-config)
+        arch: [amd64, arm64]
+        image: [alpine, alpine-dev, ubuntu, ubuntu-dev]
 
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4.3.0
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
@@ -73,30 +62,61 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push candidate
+      - name: Build and push per-arch candidate
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
-          file: ${{ matrix.dockerfile }}
-          platforms: linux/amd64,linux/arm64
+          file: Dockerfile.${{ matrix.image }}
+          platforms: linux/${{ matrix.arch }}
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.tag_prefix }}-ci
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.image }}-ci-${{ matrix.arch }}
           labels: |
             org.opencontainers.image.title=spatialite-base-image
-            org.opencontainers.image.description=${{ matrix.description }}
+            org.opencontainers.image.description=${{ contains(matrix.image, 'dev') && 'Multi-arch SpatiaLite dev image with GDAL, SQLite, SpatiaLite, GEOS, librttopo, Go (headers, gcc, pkg-config)' || 'Multi-arch slim SpatiaLite runtime image (SQLite, SpatiaLite, GEOS, PROJ, librttopo - no GDAL)' }}
             org.opencontainers.image.version=${{ inputs.version }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.licenses=GPL-2.0-or-later
             org.opencontainers.image.revision=${{ github.sha }}
-          cache-from: type=gha,scope=${{ matrix.tag_prefix }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.tag_prefix }}
+          cache-from: type=gha,scope=${{ matrix.image }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}-${{ matrix.arch }}
           provenance: false
+
+  # ---------------------------------------------------------------------------
+  # Merge the per-arch candidates into one multi-arch candidate manifest
+  # ---------------------------------------------------------------------------
+  merge:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        image: [alpine, alpine-dev, ubuntu, ubuntu-dev]
+
+    steps:
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create multi-arch candidate manifest
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          FLAVOR: ${{ matrix.image }}
+        run: |
+          docker buildx imagetools create \
+            -t "${IMAGE}:${FLAVOR}-ci" \
+            "${IMAGE}:${FLAVOR}-ci-amd64" \
+            "${IMAGE}:${FLAVOR}-ci-arm64"
 
   # ---------------------------------------------------------------------------
   # Test and scan the candidate on native runners for BOTH architectures
   # ---------------------------------------------------------------------------
   test:
-    needs: build
+    needs: merge
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     permissions:
       contents: read
