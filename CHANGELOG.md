@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.1] - 2026-09-06
+
+### Changed
+
+- CI builds each architecture natively (implements #15): the build stage of
+  `build-images.yml` now runs per-arch on native runners (`ubuntu-latest` /
+  `ubuntu-24.04-arm`), pushes per-arch candidates (`<flavor>-ci-<arch>`) and
+  merges them into the multi-arch candidate manifest with
+  `docker buildx imagetools create`. QEMU is no longer used anywhere - the
+  v3.0.0 release build spent >2h emulating the arm64 PROJ/libspatialite
+  compile; native builds take minutes
+- Buildx cache scopes are now per flavor AND architecture
+
 ## [3.0.0] - 2026-09-05
 
 ### BREAKING CHANGES

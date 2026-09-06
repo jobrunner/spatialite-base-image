@@ -45,7 +45,7 @@ docker run --rm -v $(pwd)/tests:/tests spatialite:alpine-dev sh -c \
 - `Dockerfile.ubuntu` - Ubuntu 26.04 slim runtime image (no GDAL)
 - `Dockerfile.ubuntu-dev` - Ubuntu 26.04 dev image (GDAL, headers, gcc, pkg-config, Go)
 - `.github/workflows/ci.yml` - CI pipeline: PRs run lint (hadolint + trivy config) → build → test → Trivy gate; merges run lint → build → test (amd64 + arm64) → scan → promote → tag/release
-- `.github/workflows/build-images.yml` - Reusable workflow (build → test → scan → promote): pushes multi-arch images under `<flavor>-ci` candidate tags, tests them on native amd64/arm64 runners, scans with Trivy, then promotes the tested manifests to final tags via `docker buildx imagetools create`
+- `.github/workflows/build-images.yml` - Reusable workflow (build → merge → test → scan → promote): builds each arch natively (no QEMU) under `<flavor>-ci-<arch>` tags, merges them into the `<flavor>-ci` multi-arch candidate, tests on native amd64/arm64 runners, scans with Trivy, then promotes the tested manifests to final tags via `docker buildx imagetools create`
 - `.github/workflows/security-scan.yml` - Weekly Trivy scan of published images (SARIF upload to GitHub Code Scanning)
 - `.github/workflows/rebuild.yml` - Monthly rebuild of the current release tags with fresh base image packages (same version, new digest)
 - `.github/workflows/release.yml` - Manual/emergency release (workflow_dispatch); runs the same reusable pipeline as CI
