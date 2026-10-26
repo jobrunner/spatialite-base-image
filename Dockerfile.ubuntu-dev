@@ -34,14 +34,14 @@ RUN apt-get update \
     # not dpkg-managed, and a recurring source of Go stdlib CVE findings)
     && rm -f /usr/bin/pebble
 
-# Install Go 1.26.8
+# Install Go 1.26.10
 ARG TARGETARCH
 RUN case "${TARGETARCH}" in \
         amd64) GOARCH="amd64" ;; \
         arm64) GOARCH="arm64" ;; \
         *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
     esac && \
-    wget -q "https://go.dev/dl/go1.26.8.linux-${GOARCH}.tar.gz" -O /tmp/go.tar.gz && \
+    wget -q "https://go.dev/dl/go1.26.10.linux-${GOARCH}.tar.gz" -O /tmp/go.tar.gz && \
     tar -C /usr/local -xzf /tmp/go.tar.gz && \
     rm /tmp/go.tar.gz
 
