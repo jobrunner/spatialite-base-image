@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.3] - 2026-10-28
+
+### Fixed
+
+- Weekly security scan gate scanned with a frozen vulnerability DB: the
+  gating Trivy step restored the previous run's DB cache over the fresh DB
+  the SARIF step had just downloaded, then skipped the DB update. It
+  reported 0 findings for the go1.26.8 toolchain in the dev images while
+  the SARIF step flagged its stdlib CVEs. The gate now reuses the fresh DB
+  (`cache: false`). Image contents are unchanged from 3.0.2
+
 ## [3.0.2] - 2026-10-26
 
 ### Security

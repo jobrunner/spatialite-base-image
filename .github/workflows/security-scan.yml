@@ -48,6 +48,13 @@ jobs:
           sarif_file: trivy-${{ matrix.image }}.sarif
           category: trivy-${{ matrix.image }}
 
+      # Reuses the DB the SARIF step just downloaded. `cache: false` is
+      # load-bearing: with the default cache the action restores the
+      # previous run's DB cache OVER that fresh DB, and TRIVY_SKIP_DB_UPDATE
+      # then scans with it. The first matrix job of a day saves that stale
+      # DB as the new day's cache, so the gate's DB froze week after week:
+      # on 2026-10-26 this step reported 0 findings for the go1.26.8
+      # toolchain while the SARIF step above flagged its stdlib CVEs.
       - name: Fail on fixable HIGH/CRITICAL vulnerabilities
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -57,5 +64,7 @@ jobs:
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: "1"
+          cache: "false"
+          skip-setup-trivy: true
         env:
           TRIVY_SKIP_DB_UPDATE: true
