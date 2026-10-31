@@ -11,8 +11,15 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Install runtime libraries + development packages + build tools
 # The -dev packages pull in matching runtime libraries automatically
 # upgrade ensures security patches released after the base image are applied
+# PACKAGE_REFRESH changes on every CI run (build-images.yml passes the run
+# id), so this layer is never served from the build cache: otherwise the
+# upgrade below would only re-run when the base image digest changes, and a
+# rebuild would republish stale packages (the 3.0.3 build reused python
+# 3.14.8 this way and failed its own vulnerability gate).
+ARG PACKAGE_REFRESH=local
 # hadolint ignore=DL3008
-RUN apt-get update \
+RUN echo "package refresh: ${PACKAGE_REFRESH}" \
+    && apt-get update \
     && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
     gdal-bin \

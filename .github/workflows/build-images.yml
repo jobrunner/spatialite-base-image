@@ -77,6 +77,10 @@ jobs:
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.licenses=GPL-2.0-or-later
             org.opencontainers.image.revision=${{ github.sha }}
+          # Busts the cache of the package-upgrade layer only (see the
+          # Dockerfiles); the expensive PROJ/SpatiaLite builder stays cached.
+          build-args: |
+            PACKAGE_REFRESH=${{ github.run_id }}-${{ github.run_attempt }}
           cache-from: type=gha,scope=${{ matrix.image }}-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}-${{ matrix.arch }}
           provenance: false
@@ -153,13 +157,18 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.image }}-ci \
             /tests/test-dev-image.sh
 
-      - name: Scan candidate for vulnerabilities (fail on fixable HIGH/CRITICAL)
+      # Runtime images ship to production: fixable MEDIUM blocks too. The
+      # -dev images are build stages only (nothing of them reaches a
+      # runtime image), so they gate on HIGH/CRITICAL — a stricter dev gate
+      # would hold back the runtime patches, since nothing is promoted
+      # unless every image passes.
+      - name: Scan candidate for vulnerabilities (fail on fixable findings)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.image }}-ci
           format: table
           scanners: vuln
-          severity: CRITICAL,HIGH
+          severity: ${{ endsWith(matrix.image, '-dev') && 'CRITICAL,HIGH' || 'CRITICAL,HIGH,MEDIUM' }}
           ignore-unfixed: true
           exit-code: "1"
 
