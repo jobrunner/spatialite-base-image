@@ -5,9 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.0.3] - 2026-10-28
+## [3.0.3] - 2026-10-31
+
+### Changed
+
+- The vulnerability gates (merge build, PR build, weekly scan) now fail the
+  runtime images on fixable MEDIUM findings as well, not only HIGH/CRITICAL.
+  The `-dev` images keep gating on HIGH/CRITICAL: they are build stages only,
+  and a stricter dev gate would hold back runtime patches because nothing is
+  promoted unless every image passes
 
 ### Fixed
+
+- Package upgrades were served from the build cache: the `apk upgrade` /
+  `apt-get upgrade` layers only re-ran when the distro base image digest
+  changed, so merge builds and the monthly rebuild republished stale
+  packages. The first 3.0.3 build reused python 3.14.8 in `alpine-dev` and
+  failed its own CRITICAL gate (CVE-2026-115557). A per-run
+  `PACKAGE_REFRESH` build arg now busts only those layers; the PROJ /
+  SpatiaLite builder stage stays cached
 
 - Weekly security scan gate scanned with a frozen vulnerability DB: the
   gating Trivy step restored the previous run's DB cache over the fresh DB
