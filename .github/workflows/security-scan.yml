@@ -55,13 +55,14 @@ jobs:
       # DB as the new day's cache, so the gate's DB froze week after week:
       # on 2026-10-26 this step reported 0 findings for the go1.26.8
       # toolchain while the SARIF step above flagged its stdlib CVEs.
-      - name: Fail on fixable HIGH/CRITICAL vulnerabilities
+      # Same policy as build-images.yml: MEDIUM gates the runtime images.
+      - name: Fail on fixable vulnerabilities
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.image }}-latest
           format: table
           scanners: vuln
-          severity: CRITICAL,HIGH
+          severity: ${{ endsWith(matrix.image, '-dev') && 'CRITICAL,HIGH' || 'CRITICAL,HIGH,MEDIUM' }}
           ignore-unfixed: true
           exit-code: "1"
           cache: "false"

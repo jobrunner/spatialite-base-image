@@ -157,6 +157,8 @@ jobs:
           push: false
           load: true
           tags: spatialite:${{ matrix.image_name }}
+          build-args: |
+            PACKAGE_REFRESH=${{ github.run_id }}-${{ github.run_attempt }}
           cache-from: type=gha,scope=${{ matrix.image_name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image_name }}
           provenance: false
@@ -176,13 +178,14 @@ jobs:
             spatialite:${{ matrix.image_name }} \
             /tests/test-dev-image.sh
 
-      - name: Scan image for vulnerabilities (fail on fixable HIGH/CRITICAL)
+      # Same policy as build-images.yml: MEDIUM gates the runtime images.
+      - name: Scan image for vulnerabilities (fail on fixable findings)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: spatialite:${{ matrix.image_name }}
           format: table
           scanners: vuln
-          severity: CRITICAL,HIGH
+          severity: ${{ matrix.dev && 'CRITICAL,HIGH' || 'CRITICAL,HIGH,MEDIUM' }}
           ignore-unfixed: true
           exit-code: "1"
 

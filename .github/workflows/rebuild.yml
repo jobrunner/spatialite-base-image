@@ -7,7 +7,9 @@ name: Monthly Rebuild
 # The existing version tags are refreshed in place (same X.Y.Z, new digest) -
 # the same policy the official Docker library images follow. The full
 # build -> test -> scan -> promote pipeline runs, so a rebuild that fails
-# tests or ships fixable HIGH/CRITICAL vulnerabilities is never promoted.
+# tests or ships fixable vulnerabilities (runtime: MEDIUM and up, dev:
+# HIGH and up) is never promoted. PACKAGE_REFRESH keeps the package-upgrade
+# layers out of the build cache, so a rebuild really pulls fresh packages.
 
 on:
   schedule:

@@ -7,8 +7,15 @@ LABEL description="Alpine-based dev image with GDAL, SQLite, SpatiaLite, GEOS, l
 
 # Install runtime libraries + development packages + build tools
 # apk upgrade ensures security patches released after the base image are applied
+# PACKAGE_REFRESH changes on every CI run (build-images.yml passes the run
+# id), so this layer is never served from the build cache: otherwise the
+# upgrade below would only re-run when the base image digest changes, and a
+# rebuild would republish stale packages (the 3.0.3 build reused python
+# 3.14.8 this way and failed its own vulnerability gate).
+ARG PACKAGE_REFRESH=local
 # hadolint ignore=DL3018
-RUN apk upgrade --no-cache \
+RUN echo "package refresh: ${PACKAGE_REFRESH}" \
+    && apk upgrade --no-cache \
     && apk add --no-cache \
     gdal \
     gdal-tools \
