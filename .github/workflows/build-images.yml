@@ -157,7 +157,7 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.image }}-ci \
             /tests/test-dev-image.sh
 
-      # Runtime images ship to production: fixable MEDIUM blocks too. The
+      # Runtime images ship to production: every fixable finding blocks, down to LOW. The
       # -dev images are build stages only (nothing of them reaches a
       # runtime image), so they gate on HIGH/CRITICAL — a stricter dev gate
       # would hold back the runtime patches, since nothing is promoted
@@ -168,7 +168,7 @@ jobs:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.image }}-ci
           format: table
           scanners: vuln
-          severity: ${{ endsWith(matrix.image, '-dev') && 'CRITICAL,HIGH' || 'CRITICAL,HIGH,MEDIUM' }}
+          severity: ${{ endsWith(matrix.image, '-dev') && 'CRITICAL,HIGH' || 'CRITICAL,HIGH,MEDIUM,LOW' }}
           ignore-unfixed: true
           exit-code: "1"
 
