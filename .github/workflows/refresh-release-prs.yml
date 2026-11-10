@@ -12,16 +12,14 @@ name: Refresh Release PRs
 on:
   push:
     branches: [master]
-  pull_request:
+  # pull_request_target: also runs for PRs with merge conflicts (pull_request
+  # does not). Runs master's workflow and scripts, never code from the PR.
+  pull_request_target:
     types: [labeled]
   workflow_dispatch:
 
 permissions:
   contents: read
-
-concurrency:
-  group: refresh-release-prs
-  cancel-in-progress: false
 
 env:
   PR_LABEL: auto-version
@@ -29,9 +27,14 @@ env:
 jobs:
   refresh:
     if: >-
-      github.event_name != 'pull_request' ||
+      github.event_name != 'pull_request_target' ||
       (github.event.label.name == 'auto-version' &&
        github.event.pull_request.head.repo.full_name == github.repository)
+    # On the job, not the workflow: skipped runs (other labels) never enter
+    # the group, so they cannot replace a pending refresh
+    concurrency:
+      group: refresh-release-prs
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     steps:
       - name: Create GitHub App token
