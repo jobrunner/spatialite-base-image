@@ -14,11 +14,16 @@ on:
     # Hourly: a patched base image is picked up within the hour
     - cron: "23 * * * *"
   workflow_dispatch:
+  # Every merge is a release, so open Renovate PRs are behind (and claim a
+  # taken VERSION) right after it: rebase them immediately
   push:
     branches: [main, master]
-    paths:
-      - ".github/renovate.json"
-      - ".github/workflows/renovate.yml"
+  # Checkboxes ticked by a human in the Dependency Dashboard or in a Renovate
+  # PR take effect right away instead of on the next hourly run
+  issues:
+    types: [edited]
+  pull_request:
+    types: [edited]
 
 permissions:
   contents: read
@@ -29,6 +34,18 @@ concurrency:
 
 jobs:
   renovate:
+    # Only human edits that tick a checkbox. Renovate's own edits (as the
+    # GitHub App, sender type Bot) must not trigger another run.
+    if: >-
+      (github.event_name != 'issues' && github.event_name != 'pull_request') ||
+      (github.event.sender.type != 'Bot' && (
+        (github.event_name == 'issues' &&
+         github.event.issue.title == 'Dependency Dashboard' &&
+         contains(github.event.issue.body, '- [x] <!--')) ||
+        (github.event_name == 'pull_request' &&
+         startsWith(github.event.pull_request.head.ref, 'renovate/') &&
+         github.event.pull_request.head.repo.full_name == github.repository &&
+         contains(github.event.pull_request.body, '- [x] <!-- rebase-check -->'))))
     runs-on: ubuntu-latest
     steps:
       - name: Create GitHub App token
