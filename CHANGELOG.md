@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.10] - 2026-11-10
+
+### Fixed
+
+- `refresh-release-pr.sh` requires a clean working tree and stops if the
+  merge of master never started, instead of committing a re-numbered release
+  without master
+- `refresh-release-pr.sh` auto-resolves README.md conflicts only in the
+  image tag examples; other version conflicts (e.g. the go-sqlite3
+  dependency) are left to a human instead of silently taking master's side
+
 ## [3.0.9] - 2026-11-10
 
 ### Added
