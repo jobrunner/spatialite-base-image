@@ -50,7 +50,7 @@ docker run --rm -v $(pwd)/tests:/tests spatialite:alpine-dev sh -c \
 - `.github/workflows/renovate.yml` - Hourly self-hosted Renovate run as the GitHub App (config: `.github/renovate.json`)
 - `.github/scripts/bump-release.sh` - Turns a branch into a release (VERSION, CHANGELOG entry, README tag examples; `--level patch|minor|major`, default patch), always derived from the base ref so re-runs never double-bump
 - `.github/scripts/renovate-post-upgrade.sh` - Renovate post-upgrade task: recomputes `PROJ_SHA256` / `GO_SHA256_*`, then calls `bump-release.sh`
-- `.github/workflows/release.yml` - Manual/emergency release (workflow_dispatch); runs the same reusable pipeline as CI
+- `.github/workflows/release.yml` - Manual/emergency release (workflow_dispatch) of a not yet released VERSION; runs the same reusable pipeline as CI
 - `tests/test-image.sh` - Runtime tests (library loading, spatial operations)
 - `tests/test-dev-image.sh` - Dev tests (headers, pkg-config, compilation)
 - `VERSION` - Current version number (used for auto-tagging)
@@ -78,7 +78,9 @@ Images use semantic versioning (X.Y.Z). Tags created:
 1. Create feature branch from main
 2. Make changes, then bump `VERSION`, `CHANGELOG.md` and the README examples in one go:
    `.github/scripts/bump-release.sh --level minor origin/master Added entries.md`
-   (`entries.md` holds the Markdown list items; level and section as fits the change)
+   (`entries.md` holds the Markdown list items; level and section as fits the change).
+   Write release notes only into the entries file - VERSION and CHANGELOG are regenerated from
+   `origin/master`, so after master moved: merge it, `git checkout origin/master -- VERSION CHANGELOG.md`, re-run the script
 3. Push and create Pull Request
 4. CI runs: build → test
 5. After merge to main: auto-tag → release workflow → GitHub Release

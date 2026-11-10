@@ -56,6 +56,17 @@ jobs:
 
           echo "✓ Version $FILE_VERSION matches VERSION file"
 
+      # Published versions are never rebuilt in place: every image change
+      # ships as a new version (same rule as the validate job in ci.yml).
+      - name: Validate version is not released yet
+        run: |
+          TAG="v${{ steps.version.outputs.version }}"
+          if git ls-remote --tags origin | grep -q "refs/tags/${TAG}$"; then
+            echo "::error::Tag $TAG already exists - bump VERSION instead of re-releasing it"
+            exit 1
+          fi
+          echo "✓ Tag $TAG does not exist yet"
+
   build-test-promote:
     needs: validate
     permissions:

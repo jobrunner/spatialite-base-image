@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.0.7] - 2026-11-10
+## [3.0.8] - 2026-11-10
 
 ### Changed
 
@@ -13,7 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the runtime images (merge build, PR build, security scan). Every fixable
   vulnerability in any image triggers a security release
 - `bump-release.sh` takes `--level patch|minor|major`, so manual PRs can
-  bump VERSION, CHANGELOG and the README examples in one step
+  bump VERSION, CHANGELOG and the README examples in one step. It now
+  keeps README edits made on the branch and refuses to run instead of
+  silently discarding hand edits to CHANGELOG.md
 
 ### Removed
 
@@ -21,6 +23,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with a new digest and no changelog entry; Renovate (base image digests,
   Go patches) and the 6-hourly security scan now ship every fix as its own
   patch release
+
+### Fixed
+
+- The manual release workflow (`release.yml`) refuses versions whose tag
+  already exists, so a published version can no longer be rebuilt in place
+
+## [3.0.7] - 2026-11-10
+
+### Changed
+
+- `go` 1.27.3 → 1.27.4
 
 ## [3.0.6] - 2026-11-10
 
