@@ -19,6 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `bump-release.sh` accepts `-` as section for entries that bring their own
   `### Section` headings
 
+### Changed
+
+- The PROJ source tarball is downloaded from the GitHub release
+  (`OSGeo/PROJ`) instead of download.osgeo.org, which was unreachable and
+  broke every build. Same file, same SHA256; the Renovate post-upgrade task
+  computes checksums from the same URL
+
 ## [3.0.8] - 2026-11-10
 
 ### Changed

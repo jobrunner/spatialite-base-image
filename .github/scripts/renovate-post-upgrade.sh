@@ -55,7 +55,7 @@ set_arg() {
 PROJ_VERSION=$(arg_value PROJ_VERSION < Dockerfile.alpine)
 BASE_PROJ_VERSION=$(git show "${BASE_REF}:Dockerfile.alpine" | arg_value PROJ_VERSION)
 if [ "$PROJ_VERSION" != "$BASE_PROJ_VERSION" ]; then
-    PROJ_SHA256=$(sha256_of_url "https://download.osgeo.org/proj/proj-${PROJ_VERSION}.tar.gz")
+    PROJ_SHA256=$(sha256_of_url "https://github.com/OSGeo/PROJ/releases/download/${PROJ_VERSION}/proj-${PROJ_VERSION}.tar.gz")
     set_arg PROJ_SHA256 "$PROJ_SHA256" Dockerfile.alpine Dockerfile.ubuntu
     echo "PROJ ${BASE_PROJ_VERSION} -> ${PROJ_VERSION}: sha256 ${PROJ_SHA256}"
 fi
