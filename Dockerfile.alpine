@@ -10,10 +10,11 @@
 # =============================================================================
 # Builder stage: compile PROJ (curl-free) and libspatialite
 # =============================================================================
-FROM alpine:3.24 AS builder
+FROM alpine:3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf AS builder
 
 SHELL ["/bin/ash", "-eo", "pipefail", "-c"]
 
+# renovate: datasource=github-releases depName=OSGeo/PROJ
 ARG PROJ_VERSION=9.8.1
 ARG PROJ_SHA256=af5b731c145c1d13c4e3b4eeb7d167e94e845e440f71e3496b4ed8dae0291960
 ARG SPATIALITE_VERSION=5.1.0
@@ -78,7 +79,7 @@ RUN mkdir -p /out/lib && \
 # =============================================================================
 # Runtime stage
 # =============================================================================
-FROM alpine:3.24
+FROM alpine:3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf
 
 LABEL maintainer="jobrunner"
 LABEL description="Alpine-based slim runtime image with SQLite, SpatiaLite, GEOS, PROJ (no network), librttopo - no GDAL, no libcurl"

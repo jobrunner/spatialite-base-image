@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.5] - 2026-11-10
+
+### Changed
+
+- Dependency updates move from Dependabot to self-hosted Renovate
+  (`.github/workflows/renovate.yml`, hourly, authenticated as a GitHub App).
+  Every Renovate PR is a complete patch release: a post-upgrade task bumps
+  `VERSION`, adds a CHANGELOG entry and updates the README tag examples
+  (`.github/scripts/`). Rebuilt base images (digest updates) and Go patch
+  releases auto-merge once CI is green; everything else is reviewed
+- Base images are pinned by digest (`alpine:3.24@sha256:...`,
+  `ubuntu:26.04@sha256:...`), so a patched upstream image now triggers a
+  release instead of waiting for the monthly rebuild
+- Renovate also tracks `PROJ_VERSION` and `GO_VERSION` (previously manual)
+  and recomputes their download checksums
+- The security scan of the published images runs every 6 hours instead of
+  weekly. Fixable findings above the release gate (runtime: LOW and up,
+  `-dev`: HIGH and up) open a security release PR (CVE list in the
+  CHANGELOG) that auto-merges once the rebuilt images pass the Trivy gate.
+  The PR is rebuilt against the default branch on every scan, so a release
+  merged in the meantime never leaves it stale
+
+### Security
+
+- The Go toolchain tarball in the dev images is now verified against its
+  official SHA-256 checksum (`GO_SHA256_AMD64` / `GO_SHA256_ARM64`)
+
 ## [3.0.4] - 2026-11-02
 
 ### Changed
