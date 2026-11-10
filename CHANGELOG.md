@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.0.12] - 2026-11-10
+## [3.0.13] - 2026-11-10
 
 ### Changed
 
@@ -15,6 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ticking a checkbox in the Dependency Dashboard or a Renovate PR (e.g.
   rebase/retry) starts Renovate right away. Only human edits trigger a run;
   Renovate's own dashboard updates do not
+
+## [3.0.12] - 2026-11-10
+
+### Changed
+
+- `docker/build-push-action` v7.3.0 (`53b7df9`) → v7.4.0 (`c3c9e26`)
+- `docker/login-action` v4.6.0 (`dbcb813`) → v4.8.0 (`8aa5831`)
+- `docker/setup-buildx-action` v4.3.0 (`37fe631`) → v4.4.1 (`f87e599`)
+- `github/codeql-action` v4.37.9 (`cdf488f`) → v4.39.3 (`33d7b85`)
+- `softprops/action-gh-release` v3.0.3 (`efb3536`) → v3.0.4 (`8a0cd65`)
 
 ## [3.0.11] - 2026-11-10
 
