@@ -50,6 +50,8 @@ docker run --rm -v $(pwd)/tests:/tests spatialite:alpine-dev sh -c \
 - `.github/workflows/renovate.yml` - Hourly self-hosted Renovate run as the GitHub App (config: `.github/renovate.json`)
 - `.github/scripts/bump-release.sh` - Turns a branch into a release (VERSION, CHANGELOG entry, README tag examples; `--level patch|minor|major`, default patch), always derived from the base ref so re-runs never double-bump
 - `.github/scripts/renovate-post-upgrade.sh` - Renovate post-upgrade task: recomputes `PROJ_SHA256` / `GO_SHA256_*`, then calls `bump-release.sh`
+- `.github/scripts/refresh-release-pr.sh` - Merges master into a release branch and re-numbers its release (same level and notes); exits 1 on conflicts that need a human
+- `.github/workflows/refresh-release-prs.yml` - After every push to master: runs `refresh-release-pr.sh` on open PRs labelled `auto-version` and pushes as the GitHub App
 - `.github/workflows/release.yml` - Manual/emergency release (workflow_dispatch) of a not yet released VERSION; runs the same reusable pipeline as CI
 - `tests/test-image.sh` - Runtime tests (library loading, spatial operations)
 - `tests/test-dev-image.sh` - Dev tests (headers, pkg-config, compilation)
@@ -80,8 +82,11 @@ Images use semantic versioning (X.Y.Z). Tags created:
    `.github/scripts/bump-release.sh --level minor origin/master Added entries.md`
    (`entries.md` holds the Markdown list items; level and section as fits the change).
    Write release notes only into the entries file - VERSION and CHANGELOG are regenerated from
-   `origin/master`, so after master moved: merge it, `git checkout origin/master -- VERSION CHANGELOG.md`, re-run the script
-3. Push and create Pull Request
+   `origin/master`.
+3. Push and create the Pull Request with the `auto-version` label (`gh pr create --label auto-version`):
+   whenever master moves (e.g. a Renovate auto-merge), `refresh-release-prs.yml` merges it into the
+   branch and re-numbers the release - pull before continuing locally. Without the label (or on a
+   conflict it cannot resolve), do it yourself: `git fetch origin && .github/scripts/refresh-release-pr.sh origin/master`
 4. CI runs: build → test
 5. After merge to main: auto-tag → release workflow → GitHub Release
 

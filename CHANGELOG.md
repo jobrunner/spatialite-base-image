@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.9] - 2026-11-10
+
+### Added
+
+- `refresh-release-prs.yml`: after every push to master, open PRs labelled
+  `auto-version` get master merged in and their release re-numbered (same
+  level and release notes), pushed as the GitHub App so CI runs. A Renovate
+  auto-merge no longer leaves manual PRs with a taken VERSION and CHANGELOG
+  conflicts
+- `refresh-release-pr.sh` does the same locally; conflicts outside VERSION,
+  CHANGELOG.md and README version examples abort the merge for a human
+- `bump-release.sh` accepts `-` as section for entries that bring their own
+  `### Section` headings
+
+### Changed
+
+- The PROJ source tarball is downloaded from the GitHub release
+  (`OSGeo/PROJ`) instead of download.osgeo.org, which was unreachable and
+  broke every build. Same file, same SHA256; the Renovate post-upgrade task
+  computes checksums from the same URL
+
 ## [3.0.8] - 2026-11-10
 
 ### Changed

@@ -44,7 +44,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /build
 
 # Build PROJ without curl (no network/CDN grid support)
-RUN wget -q "https://download.osgeo.org/proj/proj-${PROJ_VERSION}.tar.gz" && \
+RUN wget -q "https://github.com/OSGeo/PROJ/releases/download/${PROJ_VERSION}/proj-${PROJ_VERSION}.tar.gz" && \
     echo "${PROJ_SHA256}  proj-${PROJ_VERSION}.tar.gz" | sha256sum -c - && \
     tar xzf "proj-${PROJ_VERSION}.tar.gz" && \
     cmake -S "proj-${PROJ_VERSION}" -B proj-build -G Ninja \

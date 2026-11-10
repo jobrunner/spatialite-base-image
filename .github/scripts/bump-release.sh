@@ -12,11 +12,13 @@
 # <entries-file>, not in hand edits to CHANGELOG.md: the script refuses to
 # run if CHANGELOG.md has changes it would discard.
 #
-# Used by the Renovate post-upgrade task, the security scan workflow and for
-# manual PRs (e.g. `--level minor origin/master Added entries.md`).
+# Used by the Renovate post-upgrade task, the security scan workflow,
+# refresh-release-pr.sh and for manual PRs (e.g.
+# `--level minor origin/master Added entries.md`).
 #
 # Usage: bump-release.sh [--level patch|minor|major] <base-ref> <changelog-section> <entries-file>
-#   <entries-file> contains the Markdown list items for the new entry.
+#   <entries-file> contains the Markdown list items for the new entry. With
+#   <changelog-section> '-' it brings its own '### Section' headings instead.
 
 set -euo pipefail
 
@@ -54,7 +56,8 @@ esac
 
 ENTRY=$(mktemp)
 {
-    printf '## [%s] - %s\n\n### %s\n\n' "$NEW_VERSION" "$(date -u +%F)" "$SECTION"
+    printf '## [%s] - %s\n\n' "$NEW_VERSION" "$(date -u +%F)"
+    [ "$SECTION" = "-" ] || printf '### %s\n\n' "$SECTION"
     cat "$ENTRIES_FILE"
     printf '\n'
 } > "$ENTRY"
