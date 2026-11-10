@@ -1,0 +1,92 @@
+name: Refresh Release PRs
+
+# Every merge to master is a release, so an open PR prepared against an older
+# master claims a VERSION that is taken by now and conflicts in VERSION /
+# CHANGELOG.md. Renovate and the security scan rebuild their own PRs; this
+# does the same for PRs labelled `auto-version`: after every push to master
+# it merges master into them and re-numbers their release (same level, same
+# release notes) with .github/scripts/refresh-release-pr.sh, as the
+# repository's GitHub App so CI runs on the pushed commit. Conflicts outside
+# VERSION / CHANGELOG.md / README version examples are left to a human.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: refresh-release-prs
+  cancel-in-progress: false
+
+env:
+  PR_LABEL: auto-version
+
+jobs:
+  refresh:
+    if: >-
+      github.event_name != 'pull_request' ||
+      (github.event.label.name == 'auto-version' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.BOT_APP_CLIENT_ID }}
+          private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Refresh labelled PRs
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+
+          BOT_USER="${APP_SLUG}[bot]"
+          BOT_ID=$(gh api "/users/${BOT_USER}" --jq .id)
+          git config user.name "$BOT_USER"
+          git config user.email "${BOT_ID}+${BOT_USER}@users.noreply.github.com"
+
+          # The default branch's scripts, not the (possibly older) ones on
+          # the PR branches
+          cp -r .github/scripts "$RUNNER_TEMP/scripts"
+
+          gh pr list --label "$PR_LABEL" --state open --base "$DEFAULT_BRANCH" \
+            --json number,headRefName,isCrossRepository \
+            --jq '.[] | select(.isCrossRepository | not) | "\(.number) \(.headRefName)"' > prs.txt
+
+          if [ ! -s prs.txt ]; then
+            echo "No open PRs labelled \`${PR_LABEL}\`." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          while read -r NUMBER BRANCH <&3; do
+            git checkout --quiet -B "$BRANCH" "origin/${BRANCH}"
+            BEFORE=$(git rev-parse HEAD)
+            if ! OUTPUT=$("$RUNNER_TEMP/scripts/refresh-release-pr.sh" "origin/${DEFAULT_BRANCH}" 2>&1); then
+              echo "$OUTPUT"
+              echo "::warning::#${NUMBER}: merging ${DEFAULT_BRANCH} needs a human"
+              echo "- #${NUMBER}: **needs a human** - ${OUTPUT//$'\n'/ }" >> "$GITHUB_STEP_SUMMARY"
+              git reset --quiet --hard
+              continue
+            fi
+            echo "$OUTPUT"
+            if [ "$(git rev-parse HEAD)" != "$BEFORE" ]; then
+              git push --quiet origin "HEAD:refs/heads/${BRANCH}"
+            fi
+            echo "- #${NUMBER}: ${OUTPUT##*$'\n'}" >> "$GITHUB_STEP_SUMMARY"
+          done 3< prs.txt
