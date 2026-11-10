@@ -1,0 +1,76 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Self-hosted via .github/workflows/renovate.yml. Every update PR is a patch release: the post-upgrade task bumps VERSION, CHANGELOG.md and the README examples (see .github/scripts/).",
+  "extends": [
+    "config:recommended",
+    "docker:pinDigests",
+    "helpers:pinGitHubActionDigestsToSemver"
+  ],
+  "labels": ["dependencies"],
+  "platformCommit": "enabled",
+  "prHourlyLimit": 0,
+  "rebaseWhen": "behind-base-branch",
+  "automergeStrategy": "merge-commit",
+  "postUpgradeTasks": {
+    "commands": [
+      "bash .github/scripts/renovate-post-upgrade.sh {{{baseBranch}}}"
+    ],
+    "dataFileTemplate": "{{#each upgrades}}- `{{{depName}}}` {{{currentValue}}}{{#if currentDigestShort}} (`{{{currentDigestShort}}}`){{/if}} → {{{newValue}}}{{#if newDigestShort}} (`{{{newDigestShort}}}`){{/if}}\n{{/each}}",
+    "fileFilters": ["VERSION", "CHANGELOG.md", "README.md", "Dockerfile.*"],
+    "executionMode": "branch"
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Versions annotated with '# renovate: datasource=... depName=...' (Go, PROJ)",
+      "managerFilePatterns": ["/(^|/)Dockerfile\\.[^/]+$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>[a-z-]+) depName=(?<depName>\\S+)\\s+(?:ARG [A-Z0-9_]+=|[A-Za-z0-9_-]+: )[\"']?(?<currentValue>[^\"'\\s]+)"
+      ]
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Only move between Ubuntu LTS releases",
+      "matchDatasources": ["docker"],
+      "matchDepNames": ["ubuntu"],
+      "allowedVersions": "/^[0-9]*[02468]\\.04$/"
+    },
+    {
+      "description": "Rebuilt base images (same tag, new digest) carry distro security fixes: release them as soon as CI is green",
+      "matchManagers": ["dockerfile"],
+      "matchUpdateTypes": ["digest", "pinDigest"],
+      "addLabels": ["docker"],
+      "automerge": true
+    },
+    {
+      "description": "Go patch releases are security/bugfix releases: release them as soon as CI is green",
+      "matchDatasources": ["golang-version"],
+      "matchUpdateTypes": ["patch"],
+      "automerge": true
+    },
+    {
+      "description": "PROJ updates change the self-built library: always reviewed by a human",
+      "matchDepNames": ["OSGeo/PROJ"],
+      "automerge": false
+    },
+    {
+      "description": "Workflow tooling: one weekly PR, reviewed by a human, only releases that are a few days old",
+      "matchManagers": ["github-actions"],
+      "groupName": "github-actions",
+      "addLabels": ["github-actions"],
+      "minimumReleaseAge": "3 days",
+      "schedule": ["* 0-6 * * 1"],
+      "automerge": false
+    },
+    {
+      "description": "Renovate itself: weekly together with the other workflow tooling",
+      "matchDepNames": ["ghcr.io/renovatebot/renovate"],
+      "groupName": "github-actions",
+      "addLabels": ["github-actions"],
+      "minimumReleaseAge": "3 days",
+      "schedule": ["* 0-6 * * 1"],
+      "automerge": false
+    }
+  ]
+}

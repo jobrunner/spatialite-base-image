@@ -11,8 +11,8 @@ name: Monthly Rebuild
 
 on:
   schedule:
-    # 1st of each month, 05:00 UTC (one hour before the Monday security scan
-    # slot so a scan following a rebuild sees the fresh images)
+    # 1st of each month, 05:00 UTC. Fixable HIGH/CRITICAL findings do not
+    # wait for this: security-scan.yml (every 6h) opens a security release PR.
     - cron: "0 5 1 * *"
   workflow_dispatch:
 

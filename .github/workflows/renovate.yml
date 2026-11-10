@@ -1,0 +1,53 @@
+name: Renovate
+
+# Self-hosted Renovate (replaces Dependabot version updates), authenticated as
+# the repository's GitHub App so that its PRs trigger CI and can auto-merge.
+#
+# Every Renovate PR is a complete patch release: the post-upgrade task
+# (.github/scripts/renovate-post-upgrade.sh) recomputes download checksums
+# and bumps VERSION, CHANGELOG.md and the README examples. Rebuilt base
+# images (digest updates) and Go patch releases auto-merge once CI is green;
+# everything else waits for review. See .github/renovate.json.
+
+on:
+  schedule:
+    # Hourly: a patched base image is picked up within the hour
+    - cron: "23 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - ".github/renovate.json"
+      - ".github/workflows/renovate.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: renovate
+  cancel-in-progress: false
+
+jobs:
+  renovate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.BOT_APP_CLIENT_ID }}
+          private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
+
+      - name: Run Renovate
+        uses: renovatebot/github-action@266fef21329c44765ad42f9dea1f01f5d2d91084 # v46.3.13
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          # Updated by Renovate itself (weekly, together with the actions)
+          renovate-version: 44.226.2
+        env:
+          RENOVATE_REPOSITORIES: ${{ github.repository }}
+          RENOVATE_ONBOARDING: "false"
+          RENOVATE_REQUIRE_CONFIG: required
+          # Global-only: the post-upgrade task is the single command allowed
+          RENOVATE_ALLOWED_COMMANDS: '["^bash \\.github/scripts/renovate-post-upgrade\\.sh [A-Za-z0-9._/-]+$"]'
+          LOG_LEVEL: info

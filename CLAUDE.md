@@ -8,7 +8,7 @@ Multi-architecture Docker images (amd64/arm64) providing SQLite, SpatiaLite, GEO
 
 ## Image Types
 
-- **Runtime images** (`alpine`, `ubuntu`): Slim, for production - SpatiaLite stack only, **no GDAL/Python, no libcurl**. PROJ and libspatialite are compiled from checksum-verified sources in a multi-stage builder (PROJ with `ENABLE_CURL=OFF`, so no `PROJ_NETWORK` grid downloads). Their versions are pinned as build ARGs (`PROJ_VERSION`, `SPATIALITE_VERSION`) in the runtime Dockerfiles and must be bumped manually - package scanners do not see these self-built libraries.
+- **Runtime images** (`alpine`, `ubuntu`): Slim, for production - SpatiaLite stack only, **no GDAL/Python, no libcurl**. PROJ and libspatialite are compiled from checksum-verified sources in a multi-stage builder (PROJ with `ENABLE_CURL=OFF`, so no `PROJ_NETWORK` grid downloads). Their versions are pinned as build ARGs (`PROJ_VERSION`, `SPATIALITE_VERSION`) in the runtime Dockerfiles - package scanners do not see these self-built libraries. Renovate bumps `PROJ_VERSION` (and recomputes `PROJ_SHA256`); `SPATIALITE_VERSION` has no release feed and must be bumped manually.
 - **Dev images** (`alpine-dev`, `ubuntu-dev`): Full toolchain - GDAL, distro PROJ (with network support), headers, gcc, pkg-config, Go for CGO builds
 
 ## Build Commands
@@ -46,10 +46,12 @@ docker run --rm -v $(pwd)/tests:/tests spatialite:alpine-dev sh -c \
 - `Dockerfile.ubuntu-dev` - Ubuntu 26.04 dev image (GDAL, headers, gcc, pkg-config, Go)
 - `.github/workflows/ci.yml` - CI pipeline: PRs run lint (hadolint + trivy config) → build → test → Trivy gate; merges run lint → build → test (amd64 + arm64) → scan → promote → tag/release
 - `.github/workflows/build-images.yml` - Reusable workflow (build → merge → test → scan → promote): builds each arch natively (no QEMU) under `<flavor>-ci-<arch>` tags, merges them into the `<flavor>-ci` multi-arch candidate, tests on native amd64/arm64 runners, scans with Trivy, then promotes the tested manifests to final tags via `docker buildx imagetools create`
-- `.github/workflows/security-scan.yml` - Weekly Trivy scan of published images (SARIF upload to GitHub Code Scanning)
+- `.github/workflows/security-scan.yml` - Trivy scan of published images every 6 hours (SARIF upload to GitHub Code Scanning); fixable HIGH/CRITICAL findings open an auto-merging security release PR (VERSION bump + CHANGELOG listing the CVEs) as the GitHub App
 - `.github/workflows/rebuild.yml` - Monthly rebuild of the current release tags with fresh base image packages (same version, new digest)
+- `.github/workflows/renovate.yml` - Hourly self-hosted Renovate run as the GitHub App (config: `.github/renovate.json`)
+- `.github/scripts/bump-release.sh` - Turns a branch into a patch release (VERSION, CHANGELOG entry, README tag examples), always derived from the base ref so re-runs never double-bump
+- `.github/scripts/renovate-post-upgrade.sh` - Renovate post-upgrade task: recomputes `PROJ_SHA256` / `GO_SHA256_*`, then calls `bump-release.sh`
 - `.github/workflows/release.yml` - Manual/emergency release (workflow_dispatch); runs the same reusable pipeline as CI
-- `.github/dependabot.yml` - Weekly updates for Docker base images and GitHub Actions (keeps SHA-pinned actions current)
 - `tests/test-image.sh` - Runtime tests (library loading, spatial operations)
 - `tests/test-dev-image.sh` - Dev tests (headers, pkg-config, compilation)
 - `VERSION` - Current version number (used for auto-tagging)
@@ -81,6 +83,15 @@ Images use semantic versioning (X.Y.Z). Tags created:
 5. After merge to main: auto-tag → release workflow → GitHub Release
 
 **Important:** Direct commits to main are not allowed. Use Pull Requests.
+
+## Automated Updates and Releases
+
+Every merge to master is a release, so every automated PR carries its own VERSION bump and CHANGELOG entry:
+
+- **Renovate** (hourly, `.github/renovate.json`): base images are pinned by digest (`alpine:3.24@sha256:...`). A rebuilt base image (digest update) or a Go patch release becomes a PR that auto-merges once CI is green. Distro/Go minor+major updates, PROJ and GitHub Actions (weekly group) wait for review. Ubuntu only moves between LTS releases.
+- **Security scan** (every 6h): fixable HIGH/CRITICAL findings in the published images open a `security-release` PR with auto-merge. CI rebuilds (apk/apt upgrade) and the Trivy gate proves the fix. If the gate stays red, the fix needs a version bump (e.g. Go) and a human.
+- Both authenticate as a GitHub App (`vars.BOT_APP_CLIENT_ID`, `secrets.BOT_APP_PRIVATE_KEY`) - PRs created with `GITHUB_TOKEN` would not trigger CI.
+- Go is installed from a checksum-verified tarball (`GO_VERSION`, `GO_SHA256_AMD64`, `GO_SHA256_ARM64` in the dev Dockerfiles).
 
 ## Security Hardening
 
