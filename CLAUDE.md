@@ -46,12 +46,11 @@ docker run --rm -v $(pwd)/tests:/tests spatialite:alpine-dev sh -c \
 - `Dockerfile.ubuntu-dev` - Ubuntu 26.04 dev image (GDAL, headers, gcc, pkg-config, Go)
 - `.github/workflows/ci.yml` - CI pipeline: PRs run lint (hadolint + trivy config) → build → test → Trivy gate; merges run lint → build → test (amd64 + arm64) → scan → promote → tag/release
 - `.github/workflows/build-images.yml` - Reusable workflow (build → merge → test → scan → promote): builds each arch natively (no QEMU) under `<flavor>-ci-<arch>` tags, merges them into the `<flavor>-ci` multi-arch candidate, tests on native amd64/arm64 runners, scans with Trivy, then promotes the tested manifests to final tags via `docker buildx imagetools create`
-- `.github/workflows/security-scan.yml` - Trivy scan of published images every 6 hours (SARIF upload to GitHub Code Scanning); fixable findings above the release gate (runtime: LOW+, dev: HIGH+) open/refresh one auto-merging security release PR (VERSION bump + CHANGELOG listing the CVEs) as the GitHub App
-- `.github/workflows/rebuild.yml` - Monthly rebuild of the current release tags with fresh base image packages (same version, new digest)
+- `.github/workflows/security-scan.yml` - Trivy scan of published images every 6 hours (SARIF upload to GitHub Code Scanning); fixable findings of any severity (release gate: LOW+ for all images) open/refresh one auto-merging security release PR (VERSION bump + CHANGELOG listing the CVEs) as the GitHub App
 - `.github/workflows/renovate.yml` - Hourly self-hosted Renovate run as the GitHub App (config: `.github/renovate.json`)
-- `.github/scripts/bump-release.sh` - Turns a branch into a patch release (VERSION, CHANGELOG entry, README tag examples), always derived from the base ref so re-runs never double-bump
+- `.github/scripts/bump-release.sh` - Turns a branch into a release (VERSION, CHANGELOG entry, README tag examples; `--level patch|minor|major`, default patch), always derived from the base ref so re-runs never double-bump
 - `.github/scripts/renovate-post-upgrade.sh` - Renovate post-upgrade task: recomputes `PROJ_SHA256` / `GO_SHA256_*`, then calls `bump-release.sh`
-- `.github/workflows/release.yml` - Manual/emergency release (workflow_dispatch); runs the same reusable pipeline as CI
+- `.github/workflows/release.yml` - Manual/emergency release (workflow_dispatch) of a not yet released VERSION; runs the same reusable pipeline as CI
 - `tests/test-image.sh` - Runtime tests (library loading, spatial operations)
 - `tests/test-dev-image.sh` - Dev tests (headers, pkg-config, compilation)
 - `VERSION` - Current version number (used for auto-tagging)
@@ -77,7 +76,11 @@ Images use semantic versioning (X.Y.Z). Tags created:
 ## Development Workflow
 
 1. Create feature branch from main
-2. Make changes, update `VERSION` and `CHANGELOG.md`
+2. Make changes, then bump `VERSION`, `CHANGELOG.md` and the README examples in one go:
+   `.github/scripts/bump-release.sh --level minor origin/master Added entries.md`
+   (`entries.md` holds the Markdown list items; level and section as fits the change).
+   Write release notes only into the entries file - VERSION and CHANGELOG are regenerated from
+   `origin/master`, so after master moved: merge it, `git checkout origin/master -- VERSION CHANGELOG.md`, re-run the script
 3. Push and create Pull Request
 4. CI runs: build → test
 5. After merge to main: auto-tag → release workflow → GitHub Release
@@ -86,7 +89,7 @@ Images use semantic versioning (X.Y.Z). Tags created:
 
 ## Automated Updates and Releases
 
-Every merge to master is a release, so every automated PR carries its own VERSION bump and CHANGELOG entry:
+Every merge to master is a release (no in-place rebuilds: every image change gets its own version), so every automated PR carries its own VERSION bump and CHANGELOG entry:
 
 - **Renovate** (hourly, `.github/renovate.json`): base images are pinned by digest (`alpine:3.24@sha256:...`). A rebuilt base image (digest update) or a Go patch release becomes a PR that auto-merges once CI is green. Distro/Go minor+major updates, PROJ and GitHub Actions (weekly group) wait for review. Ubuntu only moves between LTS releases.
 - **Security scan** (every 6h): fixable findings above the release gate in the published images open a `security-release` PR (branch `security/release`, rebuilt against master on every scan, skipped while a master build runs) with auto-merge. CI rebuilds (`PACKAGE_REFRESH` busts the apk/apt layers) and the Trivy gate proves the fix. If the gate stays red, the fix needs a version bump (e.g. Go) and a human.

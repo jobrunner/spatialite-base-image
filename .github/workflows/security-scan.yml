@@ -4,9 +4,8 @@ name: Security Scan
 # refreshed at the same cadence) and reports all findings to GitHub Code
 # Scanning.
 #
-# Fixable findings above the release gate (runtime images: LOW and up, -dev
-# images: HIGH and up - same policy as build-images.yml) are not just
-# reported: the workflow maintains ONE security release PR (VERSION bump +
+# Fixable findings of any severity (the same LOW-and-up release gate as
+# build-images.yml, for runtime and -dev images) are not just reported: the workflow maintains ONE security release PR (VERSION bump +
 # CHANGELOG entry listing the CVEs) as the repository's GitHub App, with
 # auto-merge enabled. CI rebuilds the images on that PR - PACKAGE_REFRESH
 # makes apk/apt upgrade pull the fixed packages - and the Trivy gate proves
@@ -78,7 +77,7 @@ jobs:
           format: json
           output: trivy-${{ matrix.image }}.json
           scanners: vuln
-          severity: ${{ endsWith(matrix.image, '-dev') && 'CRITICAL,HIGH' || 'CRITICAL,HIGH,MEDIUM,LOW' }}
+          severity: CRITICAL,HIGH,MEDIUM,LOW
           ignore-unfixed: true
           cache: "false"
           skip-setup-trivy: true
@@ -227,7 +226,7 @@ jobs:
           {
             echo "Automated security release, maintained by \`security-scan.yml\` (refreshed against \`${BASE}\` on every scan while open)."
             echo
-            echo "The published images contain fixable vulnerabilities above the release gate (runtime images: LOW and up, \`-dev\` images: HIGH and up). CI on this PR rebuilds all images (\`PACKAGE_REFRESH\` makes \`apk/apt upgrade\` pull the fixed packages) and the Trivy gate verifies the fix. The PR merges automatically once all required checks are green; the merge publishes release **${VERSION}**."
+            echo "The published images contain fixable vulnerabilities (release gate: LOW and up, for runtime and \`-dev\` images). CI on this PR rebuilds all images (\`PACKAGE_REFRESH\` makes \`apk/apt upgrade\` pull the fixed packages) and the Trivy gate verifies the fix. The PR merges automatically once all required checks are green; the merge publishes release **${VERSION}**."
             echo
             echo "**If the Trivy gate stays red**, the fix is not available by rebuilding (e.g. Go stdlib - needs a Go update, PROJ/libspatialite - needs a version bump) and this PR needs a human."
             echo

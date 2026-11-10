@@ -178,14 +178,14 @@ jobs:
             spatialite:${{ matrix.image_name }} \
             /tests/test-dev-image.sh
 
-      # Same policy as build-images.yml: every fixable finding (down to LOW) gates the runtime images.
+      # Same policy as build-images.yml: every fixable finding (down to LOW) gates every image.
       - name: Scan image for vulnerabilities (fail on fixable findings)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: spatialite:${{ matrix.image_name }}
           format: table
           scanners: vuln
-          severity: ${{ matrix.dev && 'CRITICAL,HIGH' || 'CRITICAL,HIGH,MEDIUM,LOW' }}
+          severity: CRITICAL,HIGH,MEDIUM,LOW
           ignore-unfixed: true
           exit-code: "1"
 
