@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.6] - 2026-11-10
+
+### Changed
+
+- The `-dev` images now gate on fixable MEDIUM and LOW findings too, like
+  the runtime images (merge build, PR build, security scan). Every fixable
+  vulnerability in any image triggers a security release
+- `bump-release.sh` takes `--level patch|minor|major`, so manual PRs can
+  bump VERSION, CHANGELOG and the README examples in one step
+
+### Removed
+
+- The monthly in-place rebuild (`rebuild.yml`). It refreshed `X.Y.Z` tags
+  with a new digest and no changelog entry; Renovate (base image digests,
+  Go patches) and the 6-hourly security scan now ship every fix as its own
+  patch release
+
 ## [3.0.5] - 2026-11-10
 
 ### Changed

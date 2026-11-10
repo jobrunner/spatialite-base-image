@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# Prepare a patch release on top of a base ref:
-#   - VERSION      = VERSION of <base-ref> + 1 patch
+# Prepare a release on top of a base ref:
+#   - VERSION      = VERSION of <base-ref>, bumped by <level> (default: patch)
 #   - CHANGELOG.md = CHANGELOG of <base-ref> with a new entry prepended
 #   - README.md    = README of <base-ref> with the image tag examples bumped
 #
@@ -9,15 +9,22 @@
 # running it again on the same branch (e.g. when Renovate rebases or updates
 # its branch) yields the same result instead of bumping twice.
 #
-# Used by the Renovate post-upgrade task and by the security scan workflow.
+# Used by the Renovate post-upgrade task, the security scan workflow and for
+# manual PRs (e.g. `--level minor origin/master Added entries.md`).
 #
-# Usage: bump-release.sh <base-ref> <changelog-section> <entries-file>
+# Usage: bump-release.sh [--level patch|minor|major] <base-ref> <changelog-section> <entries-file>
 #   <entries-file> contains the Markdown list items for the new entry.
 
 set -euo pipefail
 
-if [ "$#" -ne 3 ]; then
-    echo "Usage: $0 <base-ref> <changelog-section> <entries-file>" >&2
+LEVEL="patch"
+if [ "${1:-}" = "--level" ]; then
+    LEVEL=${2:-}
+    shift 2 || true
+fi
+
+if [ "$#" -ne 3 ] || ! [[ $LEVEL =~ ^(patch|minor|major)$ ]]; then
+    echo "Usage: $0 [--level patch|minor|major] <base-ref> <changelog-section> <entries-file>" >&2
     exit 2
 fi
 
@@ -35,7 +42,12 @@ if ! [[ $BASE_VERSION =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
     echo "::error::VERSION '$BASE_VERSION' on $BASE_REF is not X.Y.Z" >&2
     exit 1
 fi
-NEW_VERSION="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((BASH_REMATCH[3] + 1))"
+MAJOR=${BASH_REMATCH[1]} MINOR=${BASH_REMATCH[2]} PATCH=${BASH_REMATCH[3]}
+case "$LEVEL" in
+    patch) NEW_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))" ;;
+    minor) NEW_VERSION="${MAJOR}.$((MINOR + 1)).0" ;;
+    major) NEW_VERSION="$((MAJOR + 1)).0.0" ;;
+esac
 
 ENTRY=$(mktemp)
 trap 'rm -f "$ENTRY"' EXIT
