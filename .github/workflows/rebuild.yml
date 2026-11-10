@@ -7,12 +7,14 @@ name: Monthly Rebuild
 # The existing version tags are refreshed in place (same X.Y.Z, new digest) -
 # the same policy the official Docker library images follow. The full
 # build -> test -> scan -> promote pipeline runs, so a rebuild that fails
-# tests or ships fixable HIGH/CRITICAL vulnerabilities is never promoted.
+# tests or ships fixable vulnerabilities (runtime: LOW and up, dev:
+# HIGH and up) is never promoted. PACKAGE_REFRESH keeps the package-upgrade
+# layers out of the build cache, so a rebuild really pulls fresh packages.
 
 on:
   schedule:
-    # 1st of each month, 05:00 UTC. Fixable HIGH/CRITICAL findings do not
-    # wait for this: security-scan.yml (every 6h) opens a security release PR.
+    # 1st of each month, 05:00 UTC. Fixable findings above the release gate
+    # do not wait for this: security-scan.yml (every 6h) opens a security release PR.
     - cron: "0 5 1 * *"
   workflow_dispatch:
 

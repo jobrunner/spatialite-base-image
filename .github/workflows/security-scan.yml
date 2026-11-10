@@ -4,13 +4,15 @@ name: Security Scan
 # refreshed at the same cadence) and reports all findings to GitHub Code
 # Scanning.
 #
-# Fixable HIGH/CRITICAL findings are not just reported: the workflow opens a
-# security release PR (VERSION bump + CHANGELOG entry listing the CVEs) as the
-# repository's GitHub App and enables auto-merge. CI rebuilds the images on
-# that PR - picking up the fixed distro packages via apk/apt upgrade - and the
-# Trivy gate proves the fix before the PR merges and the release is published.
-# If the gate stays red, the fix is not available by rebuilding (e.g. Go
-# stdlib, which needs a Go update) and the PR waits for a human.
+# Fixable findings above the release gate (runtime images: LOW and up, -dev
+# images: HIGH and up - same policy as build-images.yml) are not just
+# reported: the workflow maintains ONE security release PR (VERSION bump +
+# CHANGELOG entry listing the CVEs) as the repository's GitHub App, with
+# auto-merge enabled. CI rebuilds the images on that PR - PACKAGE_REFRESH
+# makes apk/apt upgrade pull the fixed packages - and the Trivy gate proves
+# the fix before the PR merges and the release is published. If the gate
+# stays red, the fix is not available by rebuilding (e.g. Go stdlib, which
+# needs a Go update) and the PR waits for a human.
 
 on:
   schedule:
@@ -27,6 +29,7 @@ concurrency:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  PR_BRANCH: security/release
   PR_LABEL: security-release
 
 jobs:
@@ -64,15 +67,21 @@ jobs:
           sarif_file: trivy-${{ matrix.image }}.sarif
           category: trivy-${{ matrix.image }}
 
-      - name: Scan for fixable HIGH/CRITICAL vulnerabilities
+      # Reuses the DB the SARIF step just downloaded. `cache: false` is
+      # load-bearing: with the default cache the action restores the
+      # previous run's DB cache OVER that fresh DB, and TRIVY_SKIP_DB_UPDATE
+      # then scans with it (the gate's DB froze week after week until 3.0.3).
+      - name: Scan for fixable vulnerabilities above the release gate
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.image }}-latest
           format: json
           output: trivy-${{ matrix.image }}.json
           scanners: vuln
-          severity: CRITICAL,HIGH
+          severity: ${{ endsWith(matrix.image, '-dev') && 'CRITICAL,HIGH' || 'CRITICAL,HIGH,MEDIUM,LOW' }}
           ignore-unfixed: true
+          cache: "false"
+          skip-setup-trivy: true
         env:
           TRIVY_SKIP_DB_UPDATE: true
 
@@ -87,7 +96,7 @@ jobs:
             | @tsv' "trivy-${FLAVOR}.json" > "findings-${FLAVOR}.tsv"
 
           COUNT=$(wc -l < "findings-${FLAVOR}.tsv" | tr -d ' ')
-          echo "### ${FLAVOR}: ${COUNT} fixable HIGH/CRITICAL finding(s)" >> "$GITHUB_STEP_SUMMARY"
+          echo "### ${FLAVOR}: ${COUNT} fixable finding(s) above the release gate" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload findings
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -102,6 +111,9 @@ jobs:
   security-release:
     needs: scan
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
     steps:
       - name: Download findings
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -131,43 +143,46 @@ jobs:
           COUNT=$(wc -l < entries.md | tr -d ' ')
           echo "count=${COUNT}" >> "$GITHUB_OUTPUT"
           if [ "$COUNT" -gt 0 ]; then
-            { echo "## Fixable HIGH/CRITICAL vulnerabilities"; echo; cat entries.md; } >> "$GITHUB_STEP_SUMMARY"
+            { echo "## Fixable vulnerabilities above the release gate"; echo; cat entries.md; } >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "No fixable HIGH/CRITICAL vulnerabilities in the published images." >> "$GITHUB_STEP_SUMMARY"
+            echo "No fixable vulnerabilities above the release gate in the published images." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Check for a release build in progress
+        if: steps.findings.outputs.count != '0'
+        id: busy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # A merge to master is being built and published right now (e.g. a
+          # Renovate or security release). The images scanned above are
+          # about to be replaced - re-evaluate on the next scan instead of
+          # cutting a redundant release.
+          RUNNING=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml \
+            --branch "${{ github.event.repository.default_branch }}" --limit 5 \
+            --json status --jq 'map(select(.status != "completed")) | length')
+          echo "running=${RUNNING}" >> "$GITHUB_OUTPUT"
+          if [ "$RUNNING" -gt 0 ]; then
+            echo "Release build in progress on the default branch - skipping." >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Create GitHub App token
-        if: steps.findings.outputs.count != '0'
+        if: steps.findings.outputs.count != '0' && steps.busy.outputs.running == '0'
         id: app-token
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           client-id: ${{ vars.BOT_APP_CLIENT_ID }}
           private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
 
-      - name: Check for an open security release PR
-        if: steps.findings.outputs.count != '0'
-        id: open-pr
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-        run: |
-          # One security release at a time: an open PR rebuilds with ALL
-          # currently available fixes anyway, so new findings ride along.
-          PR=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --label "$PR_LABEL" \
-            --json url --jq '.[0].url // ""')
-          echo "url=${PR}" >> "$GITHUB_OUTPUT"
-          if [ -n "$PR" ]; then
-            echo "Security release PR already open: ${PR}" >> "$GITHUB_STEP_SUMMARY"
-          fi
-
       - name: Checkout
-        if: steps.findings.outputs.count != '0' && steps.open-pr.outputs.url == ''
+        if: steps.findings.outputs.count != '0' && steps.busy.outputs.running == '0'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: repo
           token: ${{ steps.app-token.outputs.token }}
 
-      - name: Open security release PR
-        if: steps.findings.outputs.count != '0' && steps.open-pr.outputs.url == ''
+      - name: Open or refresh the security release PR
+        if: steps.findings.outputs.count != '0' && steps.busy.outputs.running == '0'
         working-directory: repo
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -180,10 +195,12 @@ jobs:
           git config user.name "$BOT_USER"
           git config user.email "${BOT_ID}+${BOT_USER}@users.noreply.github.com"
 
+          # The PR branch is always rebuilt from the current default branch:
+          # a release merged in the meantime can never leave it with an
+          # already-released VERSION or a conflicting CHANGELOG, and new
+          # findings are picked up.
           BASE=$(git rev-parse --abbrev-ref HEAD)
-          BRANCH="security/release-$(date -u +%Y%m%d-%H%M)"
-          git checkout -b "$BRANCH"
-
+          git checkout -b "$PR_BRANCH"
           .github/scripts/bump-release.sh HEAD Security ../entries.md
           VERSION=$(cat VERSION)
 
@@ -196,15 +213,21 @@ jobs:
             cat ../entries.md
           } > ../commit-msg.txt
           git commit -a -F ../commit-msg.txt
-          git push origin "$BRANCH"
+
+          if git fetch --quiet origin "$PR_BRANCH" 2>/dev/null \
+            && git diff --quiet FETCH_HEAD HEAD; then
+            echo "Security release PR branch is up to date." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git push --force origin "$PR_BRANCH"
 
           gh label create "$PR_LABEL" --color B60205 \
             --description "Automated security release (security-scan.yml)" --force
 
           {
-            echo "Automated security release, opened by \`security-scan.yml\`."
+            echo "Automated security release, maintained by \`security-scan.yml\` (refreshed against \`${BASE}\` on every scan while open)."
             echo
-            echo "The published images contain fixable HIGH/CRITICAL vulnerabilities. CI on this PR rebuilds all images (\`apk/apt upgrade\` pulls in the fixed packages) and the Trivy gate verifies the fix. The PR merges automatically once all required checks are green; the merge publishes release **${VERSION}**."
+            echo "The published images contain fixable vulnerabilities above the release gate (runtime images: LOW and up, \`-dev\` images: HIGH and up). CI on this PR rebuilds all images (\`PACKAGE_REFRESH\` makes \`apk/apt upgrade\` pull the fixed packages) and the Trivy gate verifies the fix. The PR merges automatically once all required checks are green; the merge publishes release **${VERSION}**."
             echo
             echo "**If the Trivy gate stays red**, the fix is not available by rebuilding (e.g. Go stdlib - needs a Go update, PROJ/libspatialite - needs a version bump) and this PR needs a human."
             echo
@@ -213,10 +236,17 @@ jobs:
             cat ../entries.md
           } > ../pr-body.md
 
-          PR_URL=$(gh pr create --base "$BASE" --head "$BRANCH" \
-            --title "Security release ${VERSION}" \
-            --body-file ../pr-body.md \
-            --label "$PR_LABEL")
+          PR_URL=$(gh pr list --head "$PR_BRANCH" --state open --json url --jq '.[0].url // ""')
+          if [ -n "$PR_URL" ]; then
+            gh pr edit "$PR_URL" --title "Security release ${VERSION}" --body-file ../pr-body.md
+            ACTION="Refreshed"
+          else
+            PR_URL=$(gh pr create --base "$BASE" --head "$PR_BRANCH" \
+              --title "Security release ${VERSION}" \
+              --body-file ../pr-body.md \
+              --label "$PR_LABEL")
+            ACTION="Opened"
+          fi
           gh pr merge "$PR_URL" --auto --merge
 
-          echo "Opened ${PR_URL} (auto-merge enabled)" >> "$GITHUB_STEP_SUMMARY"
+          echo "${ACTION} ${PR_URL} (auto-merge enabled)" >> "$GITHUB_STEP_SUMMARY"

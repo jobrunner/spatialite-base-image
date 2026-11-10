@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.0.3] - 2026-11-10
+## [3.0.5] - 2026-11-10
 
 ### Changed
 
@@ -21,14 +21,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Renovate also tracks `PROJ_VERSION` and `GO_VERSION` (previously manual)
   and recomputes their download checksums
 - The security scan of the published images runs every 6 hours instead of
-  weekly. Fixable HIGH/CRITICAL findings open a security release PR (CVE list
-  in the CHANGELOG) that auto-merges once the rebuilt images pass the Trivy
-  gate
+  weekly. Fixable findings above the release gate (runtime: LOW and up,
+  `-dev`: HIGH and up) open a security release PR (CVE list in the
+  CHANGELOG) that auto-merges once the rebuilt images pass the Trivy gate.
+  The PR is rebuilt against the default branch on every scan, so a release
+  merged in the meantime never leaves it stale
 
 ### Security
 
 - The Go toolchain tarball in the dev images is now verified against its
   official SHA-256 checksum (`GO_SHA256_AMD64` / `GO_SHA256_ARM64`)
+
+## [3.0.4] - 2026-11-02
+
+### Changed
+
+- The runtime images now also fail the vulnerability gates (merge build,
+  PR build, weekly scan) on fixable LOW findings, so every vulnerability
+  with an available fix blocks a runtime release. The `-dev` images keep
+  gating on HIGH/CRITICAL
+
+## [3.0.3] - 2026-10-31
+
+### Changed
+
+- The vulnerability gates (merge build, PR build, weekly scan) now fail the
+  runtime images on fixable MEDIUM findings as well, not only HIGH/CRITICAL.
+  The `-dev` images keep gating on HIGH/CRITICAL: they are build stages only,
+  and a stricter dev gate would hold back runtime patches because nothing is
+  promoted unless every image passes
+
+### Fixed
+
+- Package upgrades were served from the build cache: the `apk upgrade` /
+  `apt-get upgrade` layers only re-ran when the distro base image digest
+  changed, so merge builds and the monthly rebuild republished stale
+  packages. The first 3.0.3 build reused python 3.14.8 in `alpine-dev` and
+  failed its own CRITICAL gate (CVE-2026-115557). A per-run
+  `PACKAGE_REFRESH` build arg now busts only those layers; the PROJ /
+  SpatiaLite builder stage stays cached
+
+- Weekly security scan gate scanned with a frozen vulnerability DB: the
+  gating Trivy step restored the previous run's DB cache over the fresh DB
+  the SARIF step had just downloaded, then skipped the DB update. It
+  reported 0 findings for the go1.26.8 toolchain in the dev images while
+  the SARIF step flagged its stdlib CVEs. The gate now reuses the fresh DB
+  (`cache: false`). Image contents are unchanged from 3.0.2
 
 ## [3.0.2] - 2026-10-26
 
