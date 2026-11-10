@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.13] - 2026-11-10
+
+### Changed
+
+- Renovate also runs after every push to master, so open Renovate PRs are
+  rebased (and re-numbered) right after a release instead of up to an hour
+  later
+- Ticking a checkbox in the Dependency Dashboard or a Renovate PR (e.g.
+  rebase/retry) starts Renovate right away. Only human edits trigger a run;
+  Renovate's own dashboard updates do not
+
+### Fixed
+
+- `refresh-release-prs.yml` and the new Renovate PR trigger use
+  `pull_request_target`, so they also run for PRs with merge conflicts
+  (GitHub skips `pull_request` workflows for those). Both run master's
+  workflow and never execute code from the PR
+- Their concurrency groups moved onto the job: skipped runs (bot edits,
+  other labels) no longer replace a pending run that was really requested
+
 ## [3.0.12] - 2026-11-10
 
 ### Changed
