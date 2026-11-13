@@ -51,6 +51,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # `cache: false` here too: the action caches the DB under a per-day key
+      # (cache-trivy-<date>) that only the first run of the day can write.
+      # Every later run restores that morning DB, Trivy still considers it
+      # current and skips the download, so CVEs published during the day
+      # stayed invisible until the next day (the glibc CVEs fixed in
+      # 2.43-2ubuntu2.7 were missed by the 14:08 scan of 2026-11-13). The
+      # fresh download costs a few seconds per image.
       - name: Run Trivy scan (SARIF report, all severities)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -59,6 +66,7 @@ jobs:
           output: trivy-${{ matrix.image }}.sarif
           scanners: vuln
           severity: CRITICAL,HIGH,MEDIUM,LOW
+          cache: "false"
 
       - name: Upload SARIF to GitHub Code Scanning
         uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
