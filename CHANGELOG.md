@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.21] - 2026-11-27
+
+### Changed
+
+- `actions/create-github-app-token` v3.3.0 (`64ab729`) → v3.4.0 (`f418cff`)
+- `github/codeql-action` v4.39.3 (`33d7b85`) → v4.39.5 (`915412f`)
+- `renovatebot/github-action` v46.3.13 (`266fef2`) → v46.3.15 (`ebcbb51`)
+
 ## [3.0.20] - 2026-11-27
 
 ### Security
